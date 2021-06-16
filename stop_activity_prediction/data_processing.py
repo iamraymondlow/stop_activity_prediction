@@ -40,7 +40,7 @@ class DataProcessor:
 
         return verified_trips[retained_columns]
 
-    def load_operation_survey(self, batch_num):
+    def _load_operation_survey(self, batch_num):
         """
         Loads the operation survey for a particular batch and removes the irrelevant columns.
 
