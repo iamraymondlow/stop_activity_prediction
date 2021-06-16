@@ -100,6 +100,7 @@ class DataProcessor:
         # merge data
         batch_data = verified_trips.merge(operational_data, how='left',
                                           right_on='Driver.ID', left_on='DriverID')
+        batch_data.drop(columns=['Driver.ID'], inplace=True)
 
         # store processed batch data and combined data locally
         if not os.path.exists(config['processed_data_directory']):
