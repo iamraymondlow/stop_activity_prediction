@@ -1,0 +1,6 @@
+{
+  "operation_survey_directory": "../data/HVP/batch {0}/Batch{0}OperationSurveyData.json",
+  "verified_stop_directory": "../data/HVP/batch {0}/Batch{0}VerifiedData.json",
+  "vehicle_directory": "../data/HVP/batch {0}/batch {0} vehicle&driver info.csv",
+  "processed_data_directory": "../data/processed_data/",
+}
