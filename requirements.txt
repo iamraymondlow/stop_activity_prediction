@@ -1,0 +1,8 @@
+arrow==1.1.0
+binaryornot==0.4.4
+certifi==2021.5.30
+cookiecutter==1.7.3
+jinja2-time==0.2.0
+poyo==0.5.0
+python-slugify==5.0.2
+text-unidecode==1.3
