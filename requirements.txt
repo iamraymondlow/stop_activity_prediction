@@ -2,11 +2,14 @@ arrow==1.1.0
 binaryornot==0.4.4
 certifi==2020.6.20
 cookiecutter==1.7.3
+et-xmlfile==1.0.1
+jdcal==1.4.1
 jinja2-time==0.2.0
 mkl-fft==1.2.0
 mkl-random==1.1.1
 mkl-service==2.3.0
 numpy @ file:///opt/concourse/worker/volumes/live/c646f6b9-b398-438d-7dc7-c7142e0ba44b/volume/numpy_and_numpy_base_1596235504536/work
+openpyxl @ file:///tmp/build/80754af9/openpyxl_1598113097404/work
 pandas @ file:///opt/concourse/worker/volumes/live/f14cf8c4-c564-4eff-4b17-158e90dbf88a/volume/pandas_1602088128240/work
 poyo==0.5.0
 python-dateutil==2.8.1
