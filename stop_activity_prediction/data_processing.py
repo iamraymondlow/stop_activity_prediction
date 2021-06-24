@@ -60,7 +60,7 @@ class DataProcessor:
         operation_data = pd.json_normalize(operation_data)
 
         # filter important features
-        important_features = ['FrequentPlaces', 'Commodity', 'SpecialCargo', 'Company.Type', 'Industry',
+        important_features = ['Commodity', 'SpecialCargo', 'Company.Type', 'Industry',
                               'Driver.ID']
         retained_columns = [column
                             for column in operation_data.columns
