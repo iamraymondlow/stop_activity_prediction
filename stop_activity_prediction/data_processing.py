@@ -66,6 +66,7 @@ class DataProcessor:
                             for column in operation_data.columns
                             for feature in important_features
                             if feature in column]
+        retained_columns.remove('Commodity.OtherStr')
 
         return operation_data[retained_columns]
 
@@ -152,6 +153,26 @@ class DataProcessor:
 
         return verified_stops
 
+    def _remove_bus_data(self, trip_data, stop_data):
+        """
+        Removes all trip and stop data collected for buses.
+
+        Parameters:
+            trip_data: pandas.DataFrame
+                Contains the trip data for a particular batch.
+            stop_data: pandas.DataFrame
+                Contains the stop data for a particular batch.
+
+        Return:
+            filtered_trip_data: pandas.DataFrame
+                Contains the filtered trip data for a particular batch without any bus-related trips.
+            filtered_stop_data: pandas.DataFrame
+                Contains the filtered stop data for a particular batch without any bus-related stops.
+        """
+        filtered_trip_data = trip_data[trip_data['VehicleType'] != 'Bus']
+        filtered_stop_data = stop_data[stop_data['VehicleType'] != 'Bus']
+        return filtered_trip_data, filtered_stop_data
+
     def process_data(self, batch_num):
         """
         Performs data fusion and subsequent processing for the verified trips and operation survey data
@@ -181,6 +202,9 @@ class DataProcessor:
         batch_stop_data = verified_stops.merge(operational_data, how='left',
                                                right_on='Driver.ID', left_on='DriverID')
         batch_stop_data.drop(columns=['Driver.ID'], inplace=True)
+
+        # remove stop and trip data related to buses
+        batch_trip_data, batch_stop_data = self._remove_bus_data(batch_trip_data, batch_stop_data)
 
         # store processed batch data and combined data locally
         if not os.path.exists(config['processed_data_directory']):
