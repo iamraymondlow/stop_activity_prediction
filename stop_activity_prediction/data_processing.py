@@ -201,7 +201,6 @@ if __name__ == '__main__':
     processor.process_data(batch_num=1)
     processor.process_data(batch_num=2)
     processor.process_data(batch_num=3)
-    processor.process_data(batch_num=3)
     processor.process_data(batch_num=4)
     processor.process_data(batch_num=5)
     processor.process_data(batch_num=6)
