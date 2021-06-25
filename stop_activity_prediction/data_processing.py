@@ -21,6 +21,38 @@ class DataProcessor:
         self.combined_trip_data = pd.DataFrame()
         self.combined_stop_data = pd.DataFrame()
 
+    def _vehicle_type_mapping(self, vehicle_type):
+        """
+        Performs a vehicle type mapping to merge similar vehicle types together.
+
+        Parameters:
+            vehicle_type: str
+                Contains the original vehicle type.
+
+        Return:
+            vehicle_mapping[vehicle_type]: str
+                Contains the mapped vehicle type. Returns "Unknown" if vehicle_type is None.
+        """
+        if vehicle_type is None or vehicle_type == 'Nil':
+            return "Unknown"
+
+        vehicle_mapping = {"Truck": "Truck", "Truck-Other": "Truck",
+                           "Single unit - Rigid/fenced Walls with open top": "Single Unit",
+                           "Single unit - Rigid (>2-Axle)": "Single Unit",
+                           "Single unit - Rigid (2-Axle)": "Single Unit",
+                           "Single unit - Fully Refrigerated": "Single Unit",
+                           "Single unit - No Walls": "Single Unit", "Bus": "Bus",
+                           "Detachable Trailer - Flat Bed": "Tractor Trailer",
+                           "Detachable Trailer - Tractor Trailer (Multiple)": "Tractor Trailer",
+                           "Detachable Trailer - Tractor Trailer (Single)": "Tractor Trailer",
+                           "Detachable Trailer - Fully Refrigerated": "Tractor Trailer",
+                           "Truck-Detachable Trailer": "Tractor Trailer",
+                           "Tractor Trailer (Single)": "Tractor Trailer",
+                           "Other - Cement mixer": "Cement Mixer", "Other - Dump/Garbage Truck": "Dump/Garbage Truck",
+                           "Other - Fuel/Gas Tank": "Fuel/Gas Tank", "Other": "Other",
+                           "Truck-Other-Cement Mixer": "Cement Mixer", "Van, Sport Utility Vehicle (SUV)": "Van"}
+        return vehicle_mapping[vehicle_type]
+
     def _load_verified_trips(self, batch_num):
         """
         Loads the verified trips data for a particular batch and removes the irrelevant columns.
@@ -30,7 +62,7 @@ class DataProcessor:
                 Contains the batch number.
 
         Return:
-            verified_trips[retained_columns]: pandas.DataFrame
+            verified_trips: pandas.DataFrame
                 Contains the verified trips information for a particular batch.
         """
         with open(config['verified_stop_directory'].format(batch_num=batch_num)) as f:
@@ -39,8 +71,12 @@ class DataProcessor:
 
         # filter important features
         retained_columns = ['DriverID', 'VehicleType', 'Stops', 'Travels', 'YMD', 'Timeline', 'DayOfWeekStr']
+        verified_trips = verified_trips[retained_columns]
 
-        return verified_trips[retained_columns]
+        # perform mapping for vehicle type information
+        verified_trips['VehicleType'] = verified_trips['VehicleType'].apply(self._vehicle_type_mapping)
+
+        return verified_trips
 
     def _load_operation_survey(self, batch_num):
         """
@@ -51,7 +87,7 @@ class DataProcessor:
                 Contains the batch number.
 
         Return:
-            operation_data[retained_columns]: pandas.DataFrame
+            operation_data: pandas.DataFrame
                 Contains the operation survey data for a particular batch.
         """
         # load operational survey
@@ -67,8 +103,9 @@ class DataProcessor:
                             for feature in important_features
                             if feature in column]
         retained_columns.remove('Commodity.OtherStr')
+        operation_data = operation_data[retained_columns]
 
-        return operation_data[retained_columns]
+        return operation_data
 
     def _generate_trip_id(self, verified_trips, batch_num):
         """
@@ -104,7 +141,7 @@ class DataProcessor:
         timeline_list = []
         for i in range(len(timeline)):
             for j in range(len(timeline.loc[i, 'Timeline'])):
-                stop_dict = flatten(timeline.loc[i, 'Timeline'][j], reducer='underscore')
+                stop_dict = flatten(timeline.loc[i, 'Timeline'][j], reducer='dot')
                 stop_dict['TripID'] = timeline.loc[i, 'TripID']
                 timeline_list.append(stop_dict)
 
@@ -114,17 +151,18 @@ class DataProcessor:
 
         # drop redundant columns
         stops_df.rename(columns={'ID': 'StopID'}, inplace=True)
-        interested_columns = ['Attribute_PlaceType_', 'Attribute_Address', 'Attribute_StopLon', 'Attribute_StopLat',
-                              'Attribute_Activity_', 'StartTime', 'EndTime', 'Duration', 'StopID', 'TripID']
+        interested_columns = ['Attribute.PlaceType.', 'Attribute.Address', 'Attribute.StopLon', 'Attribute.StopLat',
+                              'Attribute.Activity.', 'StartTime', 'EndTime', 'Duration', 'StopID', 'TripID']
         retained_columns = [column
                             for column in stops_df.columns
                             for interested_column in interested_columns
                             if interested_column in column]
-        retained_columns.remove('Attribute_PlaceType_Applicable')
+        retained_columns.remove('Attribute.PlaceType.Applicable')
+        retained_columns.remove('Attribute.Activity.OtherStr')
         stops_df = stops_df[retained_columns]
 
         # remove 'Attribute_' from column name
-        stops_df.columns = [col_name.replace('Attribute_', '') for col_name in stops_df.columns]
+        stops_df.columns = [col_name.replace('Attribute.', '') for col_name in stops_df.columns]
 
         return stops_df
 
@@ -187,19 +225,19 @@ class DataProcessor:
         # import verified trip information
         verified_trips = self._load_verified_trips(batch_num)
 
-        # import operation survey data
-        operational_data = self._load_operation_survey(batch_num)
-
         # extract verified stop information
         verified_stops = self._extract_verified_stops(verified_trips, batch_num)
 
+        # import operation survey data
+        operation_data = self._load_operation_survey(batch_num)
+
         # merge trip data
-        batch_trip_data = verified_trips.merge(operational_data, how='left',
+        batch_trip_data = verified_trips.merge(operation_data, how='left',
                                                right_on='Driver.ID', left_on='DriverID')
         batch_trip_data.drop(columns=['Driver.ID'], inplace=True)
 
         # merge stop data
-        batch_stop_data = verified_stops.merge(operational_data, how='left',
+        batch_stop_data = verified_stops.merge(operation_data, how='left',
                                                right_on='Driver.ID', left_on='DriverID')
         batch_stop_data.drop(columns=['Driver.ID'], inplace=True)
 
