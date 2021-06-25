@@ -2,5 +2,6 @@
   "operation_survey_directory": "../data/HVP/batch {batch_num}/Batch{batch_num}OperationSurveyData.json",
   "verified_stop_directory": "../data/HVP/batch {batch_num}/Batch{batch_num}VerifiedData.json",
   "vehicle_info_directory": "../data/HVP/batch {batch_num}/Batch{batch_num}VehicleDriverInfo.csv",
-  "processed_data_directory": "../data/processed_data/"
+  "processed_data_directory": "../data/processed_data/",
+  "data_analysis_directory": "../data/data_analysis/"
 }
