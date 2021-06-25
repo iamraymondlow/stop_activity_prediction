@@ -18,8 +18,31 @@ class DataExplorer:
         Initialises the class object by storing the combined trip data and stop activity data
         as class attributes.
         """
-        trip_data = pd.read_excel(config['processed_data_directory'] + 'combined_data.xlsx')
+        trip_data = pd.read_excel(config['processed_data_directory'] + 'combined_trip_data.xlsx')
+        stop_data = pd.read_excel(config['processed_data_directory'] + 'combined_stop_data.xlsx')
         self.trip_data = trip_data
+        self.stop_data = stop_data
+
+    def _plot_bar_graph(self, feature_name, title):
+        """
+        Plots a bar graph for a user-defined feature.
+
+        Parameters:
+            feature_name: str
+                Contains the feature substring that can be found in the columns of interest.
+            title: str
+                Contains the title indicated on the bar graph.
+        """
+        feature_columns = [column for column in self.trip_data.columns if feature_name in column]
+        feature_data = self.trip_data[feature_columns]
+        feature_sum = feature_data.sum(axis=0)
+
+        feature_sum.plot(kind='bar')
+        feature_types = [column.replace('{}.'.format(feature_name), '') for column in feature_columns]
+        plt.xticks(ticks=range(len(feature_types)), labels=feature_types)
+        plt.ylabel('Frequency')
+        plt.title(title)
+        plt.show()
 
     def calculate_trip_statistics(self):
         """
@@ -45,55 +68,25 @@ class DataExplorer:
         plt.show()
 
         # commodity type breakdown
-        commodity_columns = [column for column in self.trip_data.columns if 'Commodity' in column]
-        commodity_columns.remove('Commodity.OtherStr')
-        commodity_data = self.trip_data[commodity_columns]
-        commodity_sum = commodity_data.sum(axis=0)
-
-        commodity_sum.plot(kind='bar')
-        commodity_types = [column.replace('Commodity.', '') for column in commodity_columns]
-        plt.xticks(ticks=range(len(commodity_types)), labels=commodity_types)
-        plt.ylabel('Frequency')
-        plt.title('Commodity Type')
-        plt.show()
+        self._plot_bar_graph('Commodity', 'Commodity Type')
 
         # special cargo type breakdown
-        specialcargo_columns = [column for column in self.trip_data.columns if 'SpecialCargo' in column]
-        specialcargo_data = self.trip_data[specialcargo_columns]
-        specialcargo_sum = specialcargo_data.sum(axis=0)
-
-        specialcargo_sum.plot(kind='bar')
-        specialcargo_types = [column.replace('SpecialCargo.', '') for column in specialcargo_columns]
-        plt.xticks(ticks=range(len(specialcargo_types)), labels=specialcargo_types)
-        plt.ylabel('Frequency')
-        plt.title('Special Cargo Type')
-        plt.show()
+        self._plot_bar_graph('SpecialCargo', 'Special Cargo Type')
 
         # company type breakdown
-        company_columns = [column for column in self.trip_data.columns if 'Company.Type' in column]
-        company_data = self.trip_data[company_columns]
-        company_sum = company_data.sum(axis=0)
-
-        company_sum.plot(kind='bar')
-        company_types = [column.replace('Company.Type.', '') for column in company_columns]
-        plt.xticks(ticks=range(len(company_types)), labels=company_types)
-        plt.ylabel('Frequency')
-        plt.title('Company Type')
-        plt.show()
+        self._plot_bar_graph('Company.Type', 'Company Type')
 
         # industry type breakdown
-        industry_columns = [column for column in self.trip_data.columns if 'Industry' in column]
-        industry_data = self.trip_data[industry_columns]
-        industry_sum = industry_data.sum(axis=0)
+        self._plot_bar_graph('Industry', 'Industry Type')
 
-        industry_sum.plot(kind='bar')
-        industry_types = [column.replace('Industry.', '') for column in industry_columns]
-        plt.xticks(ticks=range(len(industry_types)), labels=industry_types)
-        plt.ylabel('Frequency')
-        plt.title('Industry Type')
-        plt.show()
+    def calculate_stop_statistics(self):
+        """
+        Calculates different statistics related to stop data.
+        """
+        return None
 
 
 if __name__ == '__main__':
     explorer = DataExplorer()
     explorer.calculate_trip_statistics()
+    explorer.calculate_stop_statistics()
