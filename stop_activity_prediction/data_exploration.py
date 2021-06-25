@@ -23,9 +23,9 @@ class DataExplorer:
         self.trip_data = trip_data
         self.stop_data = stop_data
 
-    def _plot_bar_graph(self, feature_name, title):
+    def _plot_bar_graph_multicol(self, feature_name, title):
         """
-        Plots a bar graph for a user-defined feature.
+        Plots a bar graph for a user-defined feature that is stored over multiple columns.
 
         Parameters:
             feature_name: str
@@ -40,6 +40,22 @@ class DataExplorer:
         feature_sum.plot(kind='bar')
         feature_types = [column.replace('{}.'.format(feature_name), '') for column in feature_columns]
         plt.xticks(ticks=range(len(feature_types)), labels=feature_types)
+        plt.ylabel('Frequency')
+        plt.title(title)
+        plt.show()
+
+    def _plot_bar_graph_singlecol(self, column_name, title):
+        """
+        Plots a bar graph for a user-defined feature that is stored in one column.
+
+        Parameters:
+            column_name: str
+                Contains the column name of the feature of interest.
+            title: str
+                Contains the title indicated on the bar graph.
+        """
+        feature_type = self.trip_data[column_name].value_counts()
+        feature_type.plot(kind='bar')
         plt.ylabel('Frequency')
         plt.title(title)
         plt.show()
@@ -61,23 +77,22 @@ class DataExplorer:
         plt.show()
 
         # vehicle type breakdown
-        vehicle_type = self.trip_data['VehicleType'].value_counts()
-        vehicle_type.plot(kind='bar')
-        plt.ylabel('Frequency')
-        plt.title('Vehicle Type')
-        plt.show()
+        self._plot_bar_graph_singlecol('VehicleType', 'Vehicle Type')
+
+        # day of week breakdown
+        self._plot_bar_graph_singlecol('DayOfWeekStr', 'Day of Week')
 
         # commodity type breakdown
-        self._plot_bar_graph('Commodity', 'Commodity Type')
+        self._plot_bar_graph_multicol('Commodity', 'Commodity Type')
 
         # special cargo type breakdown
-        self._plot_bar_graph('SpecialCargo', 'Special Cargo Type')
+        self._plot_bar_graph_multicol('SpecialCargo', 'Special Cargo Type')
 
         # company type breakdown
-        self._plot_bar_graph('Company.Type', 'Company Type')
+        self._plot_bar_graph_multicol('Company.Type', 'Company Type')
 
         # industry type breakdown
-        self._plot_bar_graph('Industry', 'Industry Type')
+        self._plot_bar_graph_multicol('Industry', 'Industry Type')
 
     def calculate_stop_statistics(self):
         """
