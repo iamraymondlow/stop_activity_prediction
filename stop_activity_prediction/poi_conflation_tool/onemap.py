@@ -2,7 +2,7 @@ import requests
 import json
 import time
 import os
-from util import generate_id, remove_duplicate, extract_date
+from .util import generate_id, remove_duplicate, extract_date
 import pandas as pd
 from shapely.geometry import Polygon
 

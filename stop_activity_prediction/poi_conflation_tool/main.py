@@ -5,20 +5,20 @@ import geopandas as gpd
 import pyproj
 import glob
 import numpy as np
-from googlemap import GoogleMapScrapper
-from heremap import HereMapScrapper
-from onemap import OneMap
-from osm import OSM
-from sla import SLA
+from .googlemap import GoogleMapScrapper
+from .heremap import HereMapScrapper
+from .onemap import OneMap
+from .osm import OSM
+from .sla import SLA
 from shapely.geometry import Point
 from shapely.ops import transform
-from model import Model
+from .model import Model
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 from fuzzywuzzy.fuzz import token_set_ratio, ratio
 from joblib import load
 from shapely import geometry
-from util import divide_bounding_box, pixelise_region
+from .util import divide_bounding_box, pixelise_region
 from copy import deepcopy
 
 # load config file
