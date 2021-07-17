@@ -22,7 +22,7 @@ from .util import divide_bounding_box, pixelise_region
 from copy import deepcopy
 
 # load config file
-with open(os.path.join(os.path.dirname(__file__), 'config.json')) as f:
+with open(os.path.join(os.path.dirname(__file__), '../../config.json')) as f:
     config = json.load(f)
 
 

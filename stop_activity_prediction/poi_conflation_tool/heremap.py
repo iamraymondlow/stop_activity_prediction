@@ -7,7 +7,7 @@ import geopandas as gpd
 from .util import extract_date, divide_bounding_box, pixelise_region
 
 # load config file
-with open(os.path.join(os.path.dirname(__file__), 'config.json')) as f:
+with open(os.path.join(os.path.dirname(__file__), '../../config.json')) as f:
     config = json.load(f)
 
 
