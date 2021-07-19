@@ -1,1 +1,1 @@
-from main import POIConflationTool
+from .main import POIConflationTool
