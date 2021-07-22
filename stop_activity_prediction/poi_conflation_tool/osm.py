@@ -5,7 +5,7 @@ import time
 import numpy as np
 import pandas as pd
 import geopandas as gpd
-from .util import remove_duplicate, extract_date, capitalise_string
+from util import remove_duplicate, extract_date, capitalise_string
 from tqdm import tqdm
 from shapely.geometry import Point
 

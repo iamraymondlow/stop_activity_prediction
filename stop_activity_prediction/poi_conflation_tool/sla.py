@@ -2,7 +2,7 @@ import json
 import pandas as pd
 import geopandas as gpd
 import os
-from .util import remove_duplicate, extract_date, capitalise_string
+from util import remove_duplicate, extract_date, capitalise_string
 from pyproj import Proj
 
 # load config file
