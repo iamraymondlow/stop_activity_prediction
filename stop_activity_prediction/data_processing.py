@@ -22,8 +22,46 @@ class DataProcessor:
         Initialises the class object with an empty dataframe to store the combined data for each batch.
         """
         self.combined_trip_data = pd.DataFrame()
-        self.combined_stop_data = pd.DataFrame()
+        self.combined_stop_data = gpd.GeoDataFrame()
         self.conflation_tool = POIConflationTool()
+        print('Loading SLA land use data...')
+        self.landuse_data = self._load_landuse_data()
+        print('Loading vehicle type and place type mapping data...')
+        vehicletype_mapping = pd.read_excel(os.path.join(os.path.dirname(__file__), config['vehicletype_mapping']))
+        self.vehicletype_mapping = dict(zip(vehicletype_mapping['orig_vehicletype'],
+                                            vehicletype_mapping['new_vehicletype']))
+        placetype_mapping = pd.read_excel(os.path.join(os.path.dirname(__file__), config['placetype_mapping']))
+        self.placetype_mapping = dict(zip(placetype_mapping['google_taxonomy'],
+                                          placetype_mapping['new_placetype']))
+
+    def load_batch_data(self, batch_num):
+        """
+        Loads the batch stop data from local directory.
+
+        Return:
+            batch_data: geopandas.GeoDataFrame
+                Contains the processed stop data for a particular batch.
+        """
+        batch_data = gpd.read_file(os.path.join(os.path.dirname(__file__),
+                                                config['processed_data_directory'] +
+                                                'batch_stop_data_{}.shp'.format(batch_num)),
+                                   encoding='utf-8')
+        self.combined_stop_data = pd.concat([self.combined_stop_data, batch_data], ignore_index=True)
+        return batch_data
+
+    def load_combined_data(self):
+        """
+        Loads the combined stop data of all batches from local directory.
+
+        Return:
+            combined_stop_data: geopandas.GeoDataFrame
+                Contains the processed stop data for all batches.
+        """
+        self.combined_stop_data = gpd.read_file(os.path.join(os.path.dirname(__file__),
+                                                config['processed_data_directory'] +
+                                                'combined_stop_data.shp'),
+                                                encoding='utf-8')
+        return self.combined_stop_data
 
     def _vehicle_type_mapping(self, vehicle_type):
         """
@@ -34,28 +72,16 @@ class DataProcessor:
                 Contains the original vehicle type.
 
         Return:
-            vehicle_mapping[vehicle_type]: str
+            self.vehicle_mapping[vehicle_type]: str
                 Contains the mapped vehicle type. Returns "Unknown" if vehicle_type is None.
         """
-        if vehicle_type is None or vehicle_type == 'Nil':
+        if (vehicle_type is None) or (vehicle_type == 'Nil') or (vehicle_type == ''):
             return "Unknown"
 
-        vehicle_mapping = {"Truck": "Truck", "Truck-Other": "Truck",
-                           "Single unit - Rigid/fenced Walls with open top": "Single Unit",
-                           "Single unit - Rigid (>2-Axle)": "Single Unit",
-                           "Single unit - Rigid (2-Axle)": "Single Unit",
-                           "Single unit - Fully Refrigerated": "Single Unit",
-                           "Single unit - No Walls": "Single Unit", "Bus": "Bus",
-                           "Detachable Trailer - Flat Bed": "Tractor Trailer",
-                           "Detachable Trailer - Tractor Trailer (Multiple)": "Tractor Trailer",
-                           "Detachable Trailer - Tractor Trailer (Single)": "Tractor Trailer",
-                           "Detachable Trailer - Fully Refrigerated": "Tractor Trailer",
-                           "Truck-Detachable Trailer": "Tractor Trailer",
-                           "Tractor Trailer (Single)": "Tractor Trailer",
-                           "Other - Cement mixer": "Cement Mixer", "Other - Dump/Garbage Truck": "Dump/Garbage Truck",
-                           "Other - Fuel/Gas Tank": "Fuel/Gas Tank", "Other": "Other",
-                           "Truck-Other-Cement Mixer": "Cement Mixer", "Van, Sport Utility Vehicle (SUV)": "Van"}
-        return vehicle_mapping[vehicle_type]
+        if vehicle_type in self.vehicletype_mapping:
+            return self.vehicletype_mapping[vehicle_type]
+        else:
+            return "Unknown"
 
     def _load_verified_trips(self, batch_num):
         """
@@ -195,27 +221,25 @@ class DataProcessor:
         # merge with other trip information
         verified_stops = timeline_info.merge(other_trip_info, how='left', on='TripID')
 
+        # extract stop start time
+        verified_stops['StartHour'] = verified_stops['StartTime'].apply(lambda x: int(x.split(' ')[1].split('-')[0]))
+
         return verified_stops
 
-    def _remove_bus_data(self, trip_data, stop_data):
+    def _remove_bus_data(self, trip_data):
         """
         Removes all trip and stop data collected for buses.
 
         Parameters:
             trip_data: pandas.DataFrame
                 Contains the trip data for a particular batch.
-            stop_data: pandas.DataFrame
-                Contains the stop data for a particular batch.
 
         Return:
             filtered_trip_data: pandas.DataFrame
                 Contains the filtered trip data for a particular batch without any bus-related trips.
-            filtered_stop_data: pandas.DataFrame
-                Contains the filtered stop data for a particular batch without any bus-related stops.
         """
         filtered_trip_data = trip_data[trip_data['VehicleType'] != 'Bus']
-        filtered_stop_data = stop_data[stop_data['VehicleType'] != 'Bus']
-        return filtered_trip_data, filtered_stop_data
+        return filtered_trip_data
 
     def _load_landuse_data(self):
         """"
@@ -228,25 +252,70 @@ class DataProcessor:
         fiona.drvsupport.supported_drivers['KML'] = 'rw'
         landuse_data = gpd.read_file(os.path.join(os.path.dirname(__file__), config['ura_landuse']),
                                      driver='KML')
-        landuse_data['landuse_type'] = landuse_data['Description'].apply(lambda x: pd.read_html(x)[0].loc[0, 'Attributes.1'])
+        landuse_data['LandUseType'] = landuse_data['Description'].apply(lambda x: pd.read_html(x)[0].loc[0, 'Attributes.1'])
         landuse_data.drop(columns=['Name', 'Description'], inplace=True)
 
         return landuse_data
 
+    def _place_type_mapping(self, place_types):
+        """
+        Performs a place type mapping to merge similar place types together.
+
+        Parameters:
+            place_types: str
+                Contains the original place types.
+
+        Return:
+            mapped_placetypes: list
+                Contains the mapped place type information. Returns "Unknown" if there are no place type information
+                or if it is not following Google's taxonomy.
+        """
+        if (place_types is None) or (place_types == 'Nil') or (place_types == ''):
+            return ["Unknown"]
+
+        mapped_placetypes = [self.placetype_mapping[place_type]
+                             for place_type in place_types.split('; ')
+                             if place_type in self.placetype_mapping]
+
+        if mapped_placetypes:
+            return list(set(mapped_placetypes))
+        else:
+            return ["Unknown"]
+
     def _load_poi_data(self, stop_data):
+        """
+        Extracts the nearby POIs and calculates the number of different place types at each stop.
+
+        Return:
+            poi_data: pd.DataFrame
+                Contains the number of each POI types around each stop.
+        """
         # extract neighbouring POIs using conflation tool
+        stop_id = stop_data['StopID']
+        num_poi = []
+        placetype_df = pd.DataFrame()
         for i in range(len(stop_data)):
-            nearby_poi = self.conflation_tool.extract_poi(lat=stop_data.loc[i, ''],
-                                                          lng=stop_data.loc[i, ''],
-                                                          stop_id=stop_data.loc[i, ''])
+            nearby_poi = self.conflation_tool.extract_poi(lat=stop_data.loc[i, 'StopLat'],
+                                                          lng=stop_data.loc[i, 'StopLon'],
+                                                          stop_id=stop_data.loc[i, 'StopID'])
+            if nearby_poi is None:
+                num_poi.append(0)
+                placetype_df = placetype_df.append(pd.Series(), ignore_index=True)
 
-            # extract all place types
+            else:
+                num_poi.append(len(nearby_poi))
 
-            # remove redundant place types
+                # extract all place types
+                placetype_list = pd.Series([mapped_placetype
+                                            for placetype in nearby_poi['properties.place_type'].tolist()
+                                            for mapped_placetype in self._place_type_mapping(placetype)])
+                placetype_df = placetype_df.append(placetype_list.value_counts().T, ignore_index=True)
 
-            # perform feature extraction for place types
-
-        return None
+        assert len(placetype_df) == len(stop_id)
+        assert len(placetype_df) == len(num_poi)
+        poi_data = pd.concat([stop_id, placetype_df.fillna(value=0)], axis=1)
+        poi_data['NumPOIs'] = num_poi
+        return poi_data
 
     def perform_feature_extraction(self):
         # perform train test split
@@ -259,7 +328,7 @@ class DataProcessor:
         # TODO
         return None
 
-    def process_data(self, batch_num):
+    def process_batch_data(self, batch_num):
         """
         Performs data fusion and subsequent processing for the verified trips and operation survey data
         for a particular batch. The processed batch data and combined dataset is saved in the local directory.
@@ -273,8 +342,9 @@ class DataProcessor:
         # import verified trip information
         verified_trips = self._load_verified_trips(batch_num)
 
-        # TODO remember to remove
-        verified_trips = verified_trips[verified_trips['TripID'] == verified_trips['TripID'].unique()[0]].reset_index(drop=True)
+        # remove trip data related to buses
+        verified_trips = self._remove_bus_data(verified_trips)
+        # verified_trips = verified_trips[verified_trips['DriverID'] == verified_trips['DriverID'].unique()[0]].reset_index(drop=True) #TODO remove
 
         # extract verified stop information
         verified_stops = self._extract_verified_stops(verified_trips, batch_num)
@@ -283,19 +353,23 @@ class DataProcessor:
         operation_data = self._load_operation_survey(batch_num)
 
         # import URA land use data
-        landuse_data = self._load_landuse_data()
+        landuse_data = self.landuse_data
 
         # load POI data
-        poi_data = self._load_poi_data(verified_stops)
+        # poi_data = self._load_poi_data(verified_stops.head(n=2))
 
         # merge trip data
-        batch_trip_data = verified_trips.merge(operation_data, how='left',
-                                               right_on='Driver.ID', left_on='DriverID')
+        batch_trip_data = verified_trips.merge(operation_data,
+                                               how='left',
+                                               right_on='Driver.ID',
+                                               left_on='DriverID')
         batch_trip_data.drop(columns=['Driver.ID'], inplace=True)
 
         # merge stop data with operation data, land use data, and POI data
-        batch_stop_data = verified_stops.merge(operation_data, how='left',
-                                               right_on='Driver.ID', left_on='DriverID')
+        batch_stop_data = verified_stops.merge(operation_data,
+                                               how='left',
+                                               right_on='Driver.ID',
+                                               left_on='DriverID')
         batch_stop_data.drop(columns=['Driver.ID'], inplace=True)
         batch_stop_data = gpd.GeoDataFrame(batch_stop_data,
                                            geometry=gpd.points_from_xy(batch_stop_data['StopLon'],
@@ -304,41 +378,43 @@ class DataProcessor:
         batch_stop_data = gpd.sjoin(batch_stop_data, landuse_data, how="left", op='intersects')
         batch_stop_data.drop(columns=['index_right'], inplace=True)
 
-        # remove stop and trip data related to buses
-        batch_trip_data, batch_stop_data = self._remove_bus_data(batch_trip_data, batch_stop_data)
-
         # store processed batch data and combined data locally
-        # if not os.path.exists(os.path.join(os.path.dirname(__file__), config['processed_data_directory'])):
-        #     os.makedirs(os.path.join(os.path.dirname(__file__), config['processed_data_directory']))
-        #
-        # batch_trip_data.to_excel(os.path.join(os.path.dirname(__file__),
-        #                                       config['processed_data_directory'] +
-        #                                       'batch_trip_data_{}.xlsx'.format(batch_num)),
-        #                          index=False)
-        # batch_stop_data.to_excel(os.path.join(os.path.dirname(__file__),
-        #                                       config['processed_data_directory'] +
-        #                                       'batch_stop_data_{}.xlsx'.format(batch_num)),
-        #                          index=False)
-        # self.combined_trip_data = pd.concat([self.combined_trip_data, batch_trip_data], ignore_index=True)
-        # self.combined_trip_data.to_excel(os.path.join(os.path.dirname(__file__),
-        #                                               config['processed_data_directory'] + 'combined_trip_data.xlsx'),
-        #                                  index=False)
-        # self.combined_stop_data = pd.concat([self.combined_stop_data, batch_stop_data], ignore_index=True)
-        # self.combined_stop_data.to_excel(os.path.join(os.path.dirname(__file__),
-        #                                               config['processed_data_directory'] + 'combined_stop_data.xlsx'),
-        #                                  index=False)
-        return verified_trips, verified_stops, operation_data, landuse_data, poi_data, batch_stop_data
+        if not os.path.exists(os.path.join(os.path.dirname(__file__), config['processed_data_directory'])):
+            os.makedirs(os.path.join(os.path.dirname(__file__), config['processed_data_directory']))
+
+        batch_trip_data.to_excel(os.path.join(os.path.dirname(__file__),
+                                              config['processed_data_directory'] +
+                                              'batch_trip_data_{}.xlsx'.format(batch_num)),
+                                 index=False)
+        batch_stop_data.drop(columns=['geometry'], inplace=True)
+        batch_stop_data.to_excel(os.path.join(os.path.dirname(__file__),
+                                             config['processed_data_directory'] +
+                                             'batch_stop_data_{}.xlsx'.format(batch_num)),
+                                 index=False,
+                                 encoding='utf-8')
+
+        self.combined_trip_data = pd.concat([self.combined_trip_data, batch_trip_data], ignore_index=True)
+        self.combined_trip_data.to_excel(os.path.join(os.path.dirname(__file__),
+                                                      config['processed_data_directory'] + 'combined_trip_data.xlsx'),
+                                         index=False)
+        self.combined_stop_data = pd.concat([self.combined_stop_data, batch_stop_data], ignore_index=True)
+        self.combined_stop_data.to_excel(os.path.join(os.path.dirname(__file__),
+                                                      config['processed_data_directory'] + 'combined_stop_data.xlsx'),
+                                         index=False,
+                                         encoding='utf-8')
+
+        # return verified_trips, verified_stops, operation_data, landuse_data, poi_data, batch_trip_data, batch_stop_data  #TODO remove
 
 
 if __name__ == '__main__':
     processor = DataProcessor()
-    verified_trips, verified_stops, operation_data, landuse_data, poi_data, batch_stop_data = processor.process_data(batch_num=1)
-    # processor.process_data(batch_num=1)
-    # processor.process_data(batch_num=2)
-    # processor.process_data(batch_num=3)
-    # processor.process_data(batch_num=4)
-    # processor.process_data(batch_num=5)
-    # processor.process_data(batch_num=6)
-    # processor.process_data(batch_num=7)
-    # processor.process_data(batch_num=8)
+    # verified_trips, verified_stops, operation_data, landuse_data, poi_data, batch_trip_data, batch_stop_data = processor.process_batch_data(batch_num=1)
+    processor.process_batch_data(batch_num=1)
+    processor.process_batch_data(batch_num=2)
+    processor.process_batch_data(batch_num=3)
+    processor.process_batch_data(batch_num=4)
+    processor.process_batch_data(batch_num=5)
+    processor.process_batch_data(batch_num=6)
+    processor.process_batch_data(batch_num=7)
+    processor.process_batch_data(batch_num=8)
     # processor.perform_feature_extraction()
