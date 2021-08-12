@@ -19,14 +19,14 @@ class DataExplorer:
         Initialises the class object by storing the combined trip data and stop activity data
         as class attributes.
         """
-        trip_data = pd.read_excel(config['processed_data_directory'] + 'combined_trip_data.xlsx')
-        stop_data = pd.read_excel(config['processed_data_directory'] + 'combined_stop_data.xlsx')
-        self.trip_data = trip_data
-        self.stop_data = stop_data
+        self.trip_data = pd.read_excel(os.path.join(os.path.dirname(__file__),
+                                                    config['processed_data_directory'] + 'combined_trip_data.xlsx'))
+        self.stop_data = pd.read_excel(os.path.join(os.path.dirname(__file__),
+                                                    config['processed_data_directory'] + 'combined_stop_data.xlsx'))
         self.activity_types = ['DeliverCargo', 'PickupCargo', 'Other', 'Shift', 'ProvideService',
                                'OtherWork', 'Meal', 'DropoffTrailer', 'PickupTrailer', 'Fueling',
                                'Personal', 'Passenger', 'Resting', 'Queuing', 'DropoffContainer',
-                               'PickupContainer', 'Fail', 'Passenger']
+                               'PickupContainer', 'Fail', 'Maintenance']
 
         # create data analysis folder if not found
         if not os.path.exists(config['data_analysis_directory']):
@@ -163,9 +163,45 @@ class DataExplorer:
         plt.xticks(rotation=90)
         plt.show()
 
+    def plot_activity_start_time(self):
+        return None
+
+    def plot_activity_dayofweek(self):
+        fields = ['Activity.{}'.format(activity_type) for activity_type in self.activity_types]
+        grouped_activity = self.stop_data.groupby('DayOfWeekStr').sum()[fields]
+        grouped_activity = grouped_activity.sort_values('Activity.DeliverCargo')
+        labels = self.activity_types
+
+        # figure and axis
+        fig, ax = plt.subplots(1, figsize=(12, 10))
+        # plot bars
+        left = len(grouped_activity) * [0]
+        for idx, name in enumerate(fields):
+            plt.barh(grouped_activity.index, grouped_activity[name], left=left)
+            left = left + grouped_activity[name]
+        # title, legend, labels
+        plt.title('Activity Distribution based on Day of Week\n')
+        plt.legend(labels, loc='upper center', bbox_to_anchor=(0.5, -0.05), ncol=6)
+        plt.xlabel('Frequency')
+        # adjust limits and draw grid lines
+        plt.ylim(-0.5, ax.get_yticks()[-1] + 0.5)
+        ax.set_axisbelow(True)
+        ax.xaxis.grid(color='gray', linestyle='dashed')
+        plt.show()
+
+    def plot_activity_heatmap(self):
+        return None
+
+    def plot_activity_placetype(self):
+        return None
+
 
 if __name__ == '__main__':
     explorer = DataExplorer()
     # explorer.calculate_trip_statistics()
-    explorer.calculate_stop_statistics()
-    stop_data = explorer.stop_data
+    # explorer.calculate_stop_statistics()
+    # explorer.plot_activity_start_time()
+    explorer.plot_activity_dayofweek()
+    # explorer.plot_activity_heatmap()
+    # explorer.plot_activity_placetype()
+
