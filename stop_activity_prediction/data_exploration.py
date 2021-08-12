@@ -27,6 +27,9 @@ class DataExplorer:
                                'OtherWork', 'Meal', 'DropoffTrailer', 'PickupTrailer', 'Fueling',
                                'Personal', 'Passenger', 'Resting', 'Queuing', 'DropoffContainer',
                                'PickupContainer', 'Fail', 'Maintenance']
+        self.place_types = ['ContainerYard', 'DistributionCenter', 'Natural', 'IntermediateStorage',
+                            'Facility', 'Residence', 'Park', 'Headquarter', 'Warehouse', 'Construction',
+                            'Unknown', 'Transfer', 'Factory', 'Retail']
 
         # create data analysis folder if not found
         if not os.path.exists(config['data_analysis_directory']):
@@ -180,7 +183,7 @@ class DataExplorer:
             plt.barh(grouped_activity.index, grouped_activity[name], left=left)
             left = left + grouped_activity[name]
         # title, legend, labels
-        plt.title('Activity Distribution based on Day of Week\n')
+        plt.title('Activity Frequency vs Day of Week\n')
         plt.legend(labels, loc='upper center', bbox_to_anchor=(0.5, -0.05), ncol=6)
         plt.xlabel('Frequency')
         # adjust limits and draw grid lines
@@ -193,15 +196,43 @@ class DataExplorer:
         return None
 
     def plot_activity_placetype(self):
-        return None
+        # remove duplicated stops
+        stop_data = self.stop_data.drop_duplicates(subset=['StopID'])
+
+        fields = ['PlaceType.{}'.format(place_type) for place_type in self.place_types]
+        activity_df = pd.DataFrame()
+        for activity_type in self.activity_types:
+            filtered_data = stop_data[stop_data['Activity.{}'.format(activity_type)] == 1].reset_index(drop=True)
+            summed_placetype = filtered_data.sum()[fields]
+            normalised_placetype = (summed_placetype * 100) / (summed_placetype.sum() + 1e-9)
+            activity_df = activity_df.append(normalised_placetype.T, ignore_index=True)
+        activity_df.index = self.activity_types
+
+        # figure and axis
+        fig, ax = plt.subplots(1, figsize=(12, 10))
+        # plot bars
+        left = len(activity_df) * [0]
+        for idx, name in enumerate(fields):
+            plt.barh(activity_df.index, activity_df[name], left=left)
+            left = left + activity_df[name]
+        # title, legend, labels
+        plt.title('Place Type Distribution vs Activity Type\n')
+        plt.legend(self.place_types, loc='upper center', bbox_to_anchor=(0.5, -0.05), ncol=6)
+        plt.xlabel('Percentage')
+        # adjust limits and draw grid lines
+        plt.ylim(-0.5, ax.get_yticks()[-1] + 0.5)
+        ax.set_axisbelow(True)
+        ax.xaxis.grid(color='gray', linestyle='dashed')
+        plt.show()
 
 
 if __name__ == '__main__':
     explorer = DataExplorer()
+    stop_data = explorer.stop_data
     # explorer.calculate_trip_statistics()
     # explorer.calculate_stop_statistics()
     # explorer.plot_activity_start_time()
     explorer.plot_activity_dayofweek()
     # explorer.plot_activity_heatmap()
-    # explorer.plot_activity_placetype()
+    explorer.plot_activity_placetype()
 
