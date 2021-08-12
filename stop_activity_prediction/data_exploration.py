@@ -166,10 +166,13 @@ class DataExplorer:
         plt.xticks(rotation=90)
         plt.show()
 
-    def plot_activity_start_time(self):
+    def plot_activity_starttime(self):
         return None
 
     def plot_activity_dayofweek(self):
+        """
+        Plots the frequency of each activity conducted based on the day of week.
+        """
         fields = ['Activity.{}'.format(activity_type) for activity_type in self.activity_types]
         grouped_activity = self.stop_data.groupby('DayOfWeekStr').sum()[fields]
         grouped_activity = grouped_activity.sort_values('Activity.DeliverCargo')
@@ -196,8 +199,11 @@ class DataExplorer:
         return None
 
     def plot_activity_placetype(self):
+        """
+        Plots the distribution of each place type based on the activity conducted.
+        """
         # remove duplicated stops
-        stop_data = self.stop_data.drop_duplicates(subset=['StopID'])
+        stop_data = self.stop_data.drop_duplicates(subset=['StopID']).reset_index(drop=True)
 
         fields = ['PlaceType.{}'.format(place_type) for place_type in self.place_types]
         activity_df = pd.DataFrame()
@@ -225,14 +231,48 @@ class DataExplorer:
         ax.xaxis.grid(color='gray', linestyle='dashed')
         plt.show()
 
+    def plot_activity_landuse(self):
+        """
+        Plots the distribution of each land use type based on the activity conducted.
+        """
+        # remove duplicated stops
+        stop_data = self.stop_data.drop_duplicates(subset=['StopID']).reset_index(drop=True)
+
+        activity_df = pd.DataFrame()
+        for activity_type in self.activity_types:
+            filtered_data = stop_data[stop_data['Activity.{}'.format(activity_type)] == 1].reset_index(drop=True)
+            landuse_count = filtered_data['LandUseType'].value_counts()
+            normalised_landuse_count = (landuse_count * 100) / (landuse_count.sum() + 1e-9)
+            activity_df = activity_df.append(normalised_landuse_count.T, ignore_index=True)
+        activity_df.index = self.activity_types
+        activity_df.fillna(0, inplace=True)
+
+        # figure and axis
+        fig, ax = plt.subplots(1, figsize=(12, 10))
+        # plot bars
+        left = len(activity_df) * [0]
+        for idx, name in enumerate(activity_df.columns):
+            plt.barh(activity_df.index, activity_df[name], left=left)
+            left = left + activity_df[name]
+        # title, legend, labels
+        plt.title('Land Use Type Distribution vs Activity Type\n')
+        plt.legend(activity_df.columns, loc='upper center', bbox_to_anchor=(0.5, -0.05), ncol=4)
+        plt.xlabel('Percentage')
+        # adjust limits and draw grid lines
+        plt.ylim(-0.5, ax.get_yticks()[-1] + 0.5)
+        ax.set_axisbelow(True)
+        ax.xaxis.grid(color='gray', linestyle='dashed')
+        plt.show()
+
 
 if __name__ == '__main__':
     explorer = DataExplorer()
     stop_data = explorer.stop_data
     # explorer.calculate_trip_statistics()
     # explorer.calculate_stop_statistics()
-    # explorer.plot_activity_start_time()
-    explorer.plot_activity_dayofweek()
+    # explorer.plot_activity_dayofweek()
+    # explorer.plot_activity_placetype()
+    # explorer.plot_activity_landuse()
     # explorer.plot_activity_heatmap()
-    explorer.plot_activity_placetype()
+    explorer.plot_activity_starttime()
 
