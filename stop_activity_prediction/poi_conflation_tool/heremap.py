@@ -218,7 +218,7 @@ class HereMapScrapper:
                                'tags': tags,
                                'source': 'HereMap',
                                'requires_verification': verification},
-                'stop': stop_id,
+                'stop': str(stop_id),
                 'id': str(query_result[i]['id']),
                 'extraction_date': extract_date()
             }

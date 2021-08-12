@@ -252,7 +252,7 @@ class GoogleMapScrapper:
                                'place_type': self._concat_placetype(query_result[i]['types']),
                                'source': 'GoogleMap',
                                'requires_verification': {'summary': 'No'}},
-                'stop': stop_id,
+                'stop': str(stop_id),
                 'id': str(query_result[i]['place_id']),
                 'extraction_date': extract_date()
             }
