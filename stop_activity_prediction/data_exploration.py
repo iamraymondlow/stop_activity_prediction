@@ -167,7 +167,32 @@ class DataExplorer:
         plt.show()
 
     def plot_activity_starttime(self):
-        return None
+        """
+        Plots the distribution of each activity type based on start time.
+        """
+        activity_df = pd.DataFrame()
+        for activity_type in self.activity_types:
+            filtered_data = self.stop_data[
+                self.stop_data['Activity.{}'.format(activity_type)] == 1
+                ].reset_index(drop=True)
+            starthour_count = filtered_data['StartHour'].value_counts()
+            normalised_starthour_count = (starthour_count * 100) / (starthour_count.sum() + 1e-9)
+            activity_df = activity_df.append(normalised_starthour_count.T, ignore_index=True)
+        activity_df.index = self.activity_types
+        activity_df = activity_df.fillna(0).reset_index(drop=False)
+        activity_df_transp = activity_df.set_index('index').T
+
+        # plot graph
+        activity_df_transp.plot(figsize=(12, 10))
+        # title, legend, labels
+        plt.title('Temporal Distribution of each Activity Type\n')
+        plt.legend(self.activity_types, loc='upper center', bbox_to_anchor=(0.5, -0.05), ncol=6)
+        plt.xticks(ticks=range(0, 24), labels=[str(hour)+'00'
+                                               if len(str(hour)) == 2 else '0{}00'.format(hour)
+                                               for hour in range(0, 24)])
+        plt.xlabel('Start Hour')
+        plt.ylabel('Percentage')
+        plt.show()
 
     def plot_activity_dayofweek(self):
         """
@@ -194,9 +219,6 @@ class DataExplorer:
         ax.set_axisbelow(True)
         ax.xaxis.grid(color='gray', linestyle='dashed')
         plt.show()
-
-    def plot_activity_heatmap(self):
-        return None
 
     def plot_activity_placetype(self):
         """
@@ -273,6 +295,5 @@ if __name__ == '__main__':
     # explorer.plot_activity_dayofweek()
     # explorer.plot_activity_placetype()
     # explorer.plot_activity_landuse()
-    # explorer.plot_activity_heatmap()
     explorer.plot_activity_starttime()
 
