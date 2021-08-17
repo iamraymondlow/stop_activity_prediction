@@ -200,7 +200,9 @@ class DataExplorer:
         """
         fields = ['Activity.{}'.format(activity_type) for activity_type in self.activity_types]
         grouped_activity = self.stop_data.groupby('DayOfWeekStr').sum()[fields]
-        grouped_activity = grouped_activity.sort_values('Activity.DeliverCargo')
+        # grouped_activity = grouped_activity.sort_values('Activity.DeliverCargo')
+        grouped_activity = grouped_activity.reindex(['Sunday', 'Saturday', 'Friday', 'Thursday',
+                                                     'Wednesday', 'Tuesday', 'Monday'])
         labels = self.activity_types
 
         # figure and axis
@@ -292,8 +294,8 @@ if __name__ == '__main__':
     stop_data = explorer.stop_data
     # explorer.calculate_trip_statistics()
     # explorer.calculate_stop_statistics()
-    # explorer.plot_activity_dayofweek()
+    explorer.plot_activity_dayofweek()
     # explorer.plot_activity_placetype()
     # explorer.plot_activity_landuse()
-    explorer.plot_activity_starttime()
+    # explorer.plot_activity_starttime()
 
