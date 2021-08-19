@@ -23,9 +23,9 @@ class DataExplorer:
                                                     config['processed_data_directory'] + 'combined_trip_data.xlsx'))
         self.stop_data = pd.read_excel(os.path.join(os.path.dirname(__file__),
                                                     config['processed_data_directory'] + 'combined_stop_data.xlsx'))
-        self.activity_types = ['DeliverCargo', 'PickupCargo', 'Other', 'Shift', 'Break', 'DropoffTrailerContainer',
-                               'PickupTrailerContainer', 'Maintenance']
-        self.mapped_activity_types = ['DeliverCargo', 'PickupCargo', 'Other', 'Shift', 'ProvideService',
+        self.mapped_activity_types = ['DeliverCargo', 'PickupCargo', 'Other', 'Shift', 'Break',
+                                      'DropoffTrailerContainer', 'PickupTrailerContainer', 'Maintenance']
+        self.activity_types = ['DeliverCargo', 'PickupCargo', 'Other', 'Shift', 'ProvideService',
                                       'OtherWork', 'Meal', 'DropoffTrailer', 'PickupTrailer', 'Fueling',
                                       'Personal', 'Passenger', 'Resting', 'Queuing', 'DropoffContainer',
                                       'PickupContainer', 'Fail', 'Maintenance']
