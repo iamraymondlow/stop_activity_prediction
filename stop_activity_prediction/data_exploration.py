@@ -265,11 +265,12 @@ class DataExplorer:
         activity_df = pd.DataFrame()
         for activity_type in self.activity_types:
             filtered_data = stop_data[stop_data['Activity.{}'.format(activity_type)] == 1].reset_index(drop=True)
-            landuse_count = filtered_data['LandUseType'].value_counts()
+            landuse_count = filtered_data['MappedLandUseType'].value_counts()
             normalised_landuse_count = (landuse_count * 100) / (landuse_count.sum() + 1e-9)
             activity_df = activity_df.append(normalised_landuse_count.T, ignore_index=True)
         activity_df.index = self.activity_types
         activity_df.fillna(0, inplace=True)
+        print(activity_df.columns)
 
         # figure and axis
         fig, ax = plt.subplots(1, figsize=(12, 10))
@@ -294,8 +295,8 @@ if __name__ == '__main__':
     stop_data = explorer.stop_data
     # explorer.calculate_trip_statistics()
     # explorer.calculate_stop_statistics()
-    explorer.plot_activity_dayofweek()
+    # explorer.plot_activity_dayofweek()
     # explorer.plot_activity_placetype()
-    # explorer.plot_activity_landuse()
+    explorer.plot_activity_landuse()
     # explorer.plot_activity_starttime()
 

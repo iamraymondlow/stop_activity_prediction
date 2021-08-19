@@ -24,15 +24,18 @@ class DataProcessor:
         self.combined_trip_data = pd.DataFrame()
         self.combined_stop_data = gpd.GeoDataFrame()
         self.conflation_tool = POIConflationTool()
+        print('Loading vehicle type, place type and land use mapping data...')
+        vehicletype_mapping = pd.read_excel(os.path.join(os.path.dirname(__file__), config['vehicletype_mapping']))
+        self.vehicletype_mapping = dict(zip(vehicletype_mapping['OriginalVehicleType'],
+                                            vehicletype_mapping['MappedVehicleType']))
+        placetype_mapping = pd.read_excel(os.path.join(os.path.dirname(__file__), config['placetype_mapping']))
+        self.placetype_mapping = dict(zip(placetype_mapping['OriginalPlaceType'],
+                                          placetype_mapping['NewPlaceType']))
+        landusetype_mapping = pd.read_excel(os.path.join(os.path.dirname(__file__), config['landusetype_mapping']))
+        self.landusetype_mapping = dict(zip(landusetype_mapping['OriginalLandUseType'],
+                                            landusetype_mapping['MappedLandUseType']))
         print('Loading SLA land use data...')
         self.landuse_data = self._load_landuse_data()
-        print('Loading vehicle type and place type mapping data...')
-        vehicletype_mapping = pd.read_excel(os.path.join(os.path.dirname(__file__), config['vehicletype_mapping']))
-        self.vehicletype_mapping = dict(zip(vehicletype_mapping['orig_vehicletype'],
-                                            vehicletype_mapping['new_vehicletype']))
-        placetype_mapping = pd.read_excel(os.path.join(os.path.dirname(__file__), config['placetype_mapping']))
-        self.placetype_mapping = dict(zip(placetype_mapping['google_taxonomy'],
-                                          placetype_mapping['new_placetype']))
 
     def load_batch_data(self, batch_num):
         """
@@ -241,6 +244,23 @@ class DataProcessor:
         filtered_trip_data = trip_data[trip_data['VehicleType'] != 'Bus']
         return filtered_trip_data
 
+    def _landuse_type_mapping(self, landuse_type):
+        """
+        Performs a land use type mapping to merge similar land use types together.
+
+        Parameters:
+            landuse_type: str
+                Contains the original landuse type from URA.
+
+        Return:
+            self.landuse_mapping[landuse_type]: str
+                Contains the mapped landuse type.
+        """
+        if (landuse_type is None) or (landuse_type == 'Nil') or (landuse_type == '') or (landuse_type not in self.landusetype_mapping):
+            raise ValueError('Land use type {} is invalid'.format(landuse_type))
+        else:
+            return self.landusetype_mapping[landuse_type]
+
     def _load_landuse_data(self):
         """"
         Loads the URA 2019 land use data.
@@ -253,6 +273,7 @@ class DataProcessor:
         landuse_data = gpd.read_file(os.path.join(os.path.dirname(__file__), config['ura_landuse']),
                                      driver='KML')
         landuse_data['LandUseType'] = landuse_data['Description'].apply(lambda x: pd.read_html(x)[0].loc[0, 'Attributes.1'])
+        landuse_data['MappedLandUseType'] = landuse_data['LandUseType'].apply(lambda x: self._landuse_type_mapping(x))
         landuse_data.drop(columns=['Name', 'Description'], inplace=True)
 
         return landuse_data
