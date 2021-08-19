@@ -3,6 +3,8 @@ import pandas as pd
 import os
 import fiona
 import geopandas as gpd
+import numpy as np
+from copy import deepcopy
 from pathlib import Path
 from flatten_dict import flatten
 from poi_conflation_tool import POIConflationTool
@@ -24,7 +26,8 @@ class DataProcessor:
         self.combined_trip_data = pd.DataFrame()
         self.combined_stop_data = gpd.GeoDataFrame()
         self.conflation_tool = POIConflationTool()
-        print('Loading vehicle type, place type and land use mapping data...')
+
+        print('Loading vehicle type, place type, land use, and activity type mapping data...')
         vehicletype_mapping = pd.read_excel(os.path.join(os.path.dirname(__file__), config['vehicletype_mapping']))
         self.vehicletype_mapping = dict(zip(vehicletype_mapping['OriginalVehicleType'],
                                             vehicletype_mapping['MappedVehicleType']))
@@ -34,6 +37,10 @@ class DataProcessor:
         landusetype_mapping = pd.read_excel(os.path.join(os.path.dirname(__file__), config['landusetype_mapping']))
         self.landusetype_mapping = dict(zip(landusetype_mapping['OriginalLandUseType'],
                                             landusetype_mapping['MappedLandUseType']))
+        activitytype_mapping = pd.read_excel(os.path.join(os.path.dirname(__file__), config['activitytype_mapping']))
+        self.activitytype_mapping = dict(zip(activitytype_mapping['OriginalActivityType'],
+                                             activitytype_mapping['MappedActivityType']))
+
         print('Loading SLA land use data...')
         self.landuse_data = self._load_landuse_data()
 
@@ -201,6 +208,37 @@ class DataProcessor:
 
         return stops_df
 
+    def _activity_type_mapping(self, verified_stops):
+        """
+        Performs an activity type mapping to merge similar activity types together.
+
+        Parameters:
+            verified_stops: pd.DataFrame
+                Contains the verified stops information with original activity types.
+
+        Return:
+            verified_stops: pd.DataFrame
+                Contains the verified stops information with the newly mapped activity types.
+        """
+        activity_types = ['DeliverCargo', 'PickupCargo', 'Other', 'Shift', 'ProvideService',
+                          'OtherWork', 'Meal', 'DropoffTrailer', 'PickupTrailer', 'Fueling',
+                          'Personal', 'Passenger', 'Resting', 'Queuing', 'DropoffContainer',
+                          'PickupContainer', 'Fail', 'Maintenance']
+        for activity in activity_types:
+            if 'MappedActivity.{}'.format(self.activitytype_mapping[activity]) not in verified_stops.columns:
+                verified_stops['MappedActivity.{}'.format(self.activitytype_mapping[activity])] = deepcopy(
+                    verified_stops['Activity.{}'.format(activity)]
+                )
+            else:
+                verified_stops['MappedActivity.{}'.format(self.activitytype_mapping[activity])] = \
+                    verified_stops['MappedActivity.{}'.format(self.activitytype_mapping[activity])] + \
+                    verified_stops['Activity.{}'.format(activity)]
+            idx = verified_stops[verified_stops['MappedActivity.{}'.format(
+                self.activitytype_mapping[activity])] > 0].index.tolist()
+            verified_stops.loc[idx, 'MappedActivity.{}'.format(self.activitytype_mapping[activity])] = 1
+
+        return verified_stops
+
     def _extract_verified_stops(self, verified_trips, batch_num):
         """
         Extracts the verified stop information based on the verified trips.
@@ -226,6 +264,9 @@ class DataProcessor:
 
         # extract stop start time
         verified_stops['StartHour'] = verified_stops['StartTime'].apply(lambda x: int(x.split(' ')[1].split('-')[0]))
+
+        # perform mapping of activity types
+        verified_stops = self._activity_type_mapping(verified_stops)
 
         return verified_stops
 
@@ -424,12 +465,12 @@ class DataProcessor:
                                          index=False,
                                          encoding='utf-8')
 
-        # return verified_trips, verified_stops, operation_data, landuse_data, poi_data, batch_trip_data, batch_stop_data  #TODO remove
+        # return verified_trips, verified_stops, operation_data, landuse_data, batch_trip_data, batch_stop_data  #TODO remove
 
 
 if __name__ == '__main__':
     processor = DataProcessor()
-    # verified_trips, verified_stops, operation_data, landuse_data, poi_data, batch_trip_data, batch_stop_data = processor.process_batch_data(batch_num=1)
+    # verified_trips, verified_stops, operation_data, landuse_data, batch_trip_data, batch_stop_data = processor.process_batch_data(batch_num=1)
     processor.process_batch_data(batch_num=1)
     processor.process_batch_data(batch_num=2)
     processor.process_batch_data(batch_num=3)

@@ -23,10 +23,12 @@ class DataExplorer:
                                                     config['processed_data_directory'] + 'combined_trip_data.xlsx'))
         self.stop_data = pd.read_excel(os.path.join(os.path.dirname(__file__),
                                                     config['processed_data_directory'] + 'combined_stop_data.xlsx'))
-        self.activity_types = ['DeliverCargo', 'PickupCargo', 'Other', 'Shift', 'ProvideService',
-                               'OtherWork', 'Meal', 'DropoffTrailer', 'PickupTrailer', 'Fueling',
-                               'Personal', 'Passenger', 'Resting', 'Queuing', 'DropoffContainer',
-                               'PickupContainer', 'Fail', 'Maintenance']
+        self.activity_types = ['DeliverCargo', 'PickupCargo', 'Other', 'Shift', 'Break', 'DropoffTrailerContainer',
+                               'PickupTrailerContainer', 'Maintenance']
+        self.mapped_activity_types = ['DeliverCargo', 'PickupCargo', 'Other', 'Shift', 'ProvideService',
+                                      'OtherWork', 'Meal', 'DropoffTrailer', 'PickupTrailer', 'Fueling',
+                                      'Personal', 'Passenger', 'Resting', 'Queuing', 'DropoffContainer',
+                                      'PickupContainer', 'Fail', 'Maintenance']
         self.place_types = ['ContainerYard', 'DistributionCenter', 'Natural', 'IntermediateStorage',
                             'Facility', 'Residence', 'Park', 'Headquarter', 'Warehouse', 'Construction',
                             'Unknown', 'Transfer', 'Factory', 'Retail']
@@ -171,14 +173,14 @@ class DataExplorer:
         Plots the distribution of each activity type based on start time.
         """
         activity_df = pd.DataFrame()
-        for activity_type in self.activity_types:
+        for activity_type in self.mapped_activity_types:
             filtered_data = self.stop_data[
-                self.stop_data['Activity.{}'.format(activity_type)] == 1
+                self.stop_data['MappedActivity.{}'.format(activity_type)] == 1
                 ].reset_index(drop=True)
             starthour_count = filtered_data['StartHour'].value_counts()
             normalised_starthour_count = (starthour_count * 100) / (starthour_count.sum() + 1e-9)
             activity_df = activity_df.append(normalised_starthour_count.T, ignore_index=True)
-        activity_df.index = self.activity_types
+        activity_df.index = self.mapped_activity_types
         activity_df = activity_df.fillna(0).reset_index(drop=False)
         activity_df_transp = activity_df.set_index('index').T
 
@@ -186,7 +188,7 @@ class DataExplorer:
         activity_df_transp.plot(figsize=(12, 10))
         # title, legend, labels
         plt.title('Temporal Distribution of each Activity Type\n')
-        plt.legend(self.activity_types, loc='upper center', bbox_to_anchor=(0.5, -0.05), ncol=6)
+        plt.legend(self.mapped_activity_types, loc='upper center', bbox_to_anchor=(0.5, -0.05), ncol=6)
         plt.xticks(ticks=range(0, 24), labels=[str(hour)+'00'
                                                if len(str(hour)) == 2 else '0{}00'.format(hour)
                                                for hour in range(0, 24)])
@@ -198,12 +200,11 @@ class DataExplorer:
         """
         Plots the frequency of each activity conducted based on the day of week.
         """
-        fields = ['Activity.{}'.format(activity_type) for activity_type in self.activity_types]
+        fields = ['MappedActivity.{}'.format(activity_type) for activity_type in self.mapped_activity_types]
         grouped_activity = self.stop_data.groupby('DayOfWeekStr').sum()[fields]
-        # grouped_activity = grouped_activity.sort_values('Activity.DeliverCargo')
         grouped_activity = grouped_activity.reindex(['Sunday', 'Saturday', 'Friday', 'Thursday',
                                                      'Wednesday', 'Tuesday', 'Monday'])
-        labels = self.activity_types
+        labels = self.mapped_activity_types
 
         # figure and axis
         fig, ax = plt.subplots(1, figsize=(12, 10))
@@ -231,12 +232,12 @@ class DataExplorer:
 
         fields = ['PlaceType.{}'.format(place_type) for place_type in self.place_types]
         activity_df = pd.DataFrame()
-        for activity_type in self.activity_types:
-            filtered_data = stop_data[stop_data['Activity.{}'.format(activity_type)] == 1].reset_index(drop=True)
+        for activity_type in self.mapped_activity_types:
+            filtered_data = stop_data[stop_data['MappedActivity.{}'.format(activity_type)] == 1].reset_index(drop=True)
             summed_placetype = filtered_data.sum()[fields]
             normalised_placetype = (summed_placetype * 100) / (summed_placetype.sum() + 1e-9)
             activity_df = activity_df.append(normalised_placetype.T, ignore_index=True)
-        activity_df.index = self.activity_types
+        activity_df.index = self.mapped_activity_types
 
         # figure and axis
         fig, ax = plt.subplots(1, figsize=(12, 10))
@@ -263,12 +264,12 @@ class DataExplorer:
         stop_data = self.stop_data.drop_duplicates(subset=['StopID']).reset_index(drop=True)
 
         activity_df = pd.DataFrame()
-        for activity_type in self.activity_types:
-            filtered_data = stop_data[stop_data['Activity.{}'.format(activity_type)] == 1].reset_index(drop=True)
+        for activity_type in self.mapped_activity_types:
+            filtered_data = stop_data[stop_data['MappedActivity.{}'.format(activity_type)] == 1].reset_index(drop=True)
             landuse_count = filtered_data['MappedLandUseType'].value_counts()
             normalised_landuse_count = (landuse_count * 100) / (landuse_count.sum() + 1e-9)
             activity_df = activity_df.append(normalised_landuse_count.T, ignore_index=True)
-        activity_df.index = self.activity_types
+        activity_df.index = self.mapped_activity_types
         activity_df.fillna(0, inplace=True)
         print(activity_df.columns)
 
@@ -295,8 +296,8 @@ if __name__ == '__main__':
     stop_data = explorer.stop_data
     # explorer.calculate_trip_statistics()
     # explorer.calculate_stop_statistics()
-    # explorer.plot_activity_dayofweek()
-    # explorer.plot_activity_placetype()
+    explorer.plot_activity_dayofweek()
+    explorer.plot_activity_placetype()
     explorer.plot_activity_landuse()
-    # explorer.plot_activity_starttime()
+    explorer.plot_activity_starttime()
 
