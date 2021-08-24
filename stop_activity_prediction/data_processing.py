@@ -297,7 +297,8 @@ class DataProcessor:
             self.landuse_mapping[landuse_type]: str
                 Contains the mapped landuse type.
         """
-        if (landuse_type is None) or (landuse_type == 'Nil') or (landuse_type == '') or (landuse_type not in self.landusetype_mapping):
+        if (landuse_type is None) or (landuse_type == 'Nil') or (landuse_type == '') or \
+            (landuse_type not in self.landusetype_mapping):
             raise ValueError('Land use type {} is invalid'.format(landuse_type))
         else:
             return self.landusetype_mapping[landuse_type]
@@ -313,7 +314,8 @@ class DataProcessor:
         fiona.drvsupport.supported_drivers['KML'] = 'rw'
         landuse_data = gpd.read_file(os.path.join(os.path.dirname(__file__), config['ura_landuse']),
                                      driver='KML')
-        landuse_data['LandUseType'] = landuse_data['Description'].apply(lambda x: pd.read_html(x)[0].loc[0, 'Attributes.1'])
+        landuse_data['LandUseType'] = landuse_data['Description'].apply(lambda x:
+                                                                        pd.read_html(x)[0].loc[0, 'Attributes.1'])
         landuse_data['MappedLandUseType'] = landuse_data['LandUseType'].apply(lambda x: self._landuse_type_mapping(x))
         landuse_data.drop(columns=['Name', 'Description'], inplace=True)
 
@@ -333,16 +335,16 @@ class DataProcessor:
                 or if it is not following Google's taxonomy.
         """
         if (place_types is None) or (place_types == 'Nil') or (place_types == ''):
-            return ["Unknown"]
+            return ["POI.Unknown"]
 
-        mapped_placetypes = [self.placetype_mapping[place_type]
+        mapped_placetypes = ['POI.{}'.format(self.placetype_mapping[place_type])
                              for place_type in place_types.split('; ')
                              if place_type in self.placetype_mapping]
 
         if mapped_placetypes:
             return list(set(mapped_placetypes))
         else:
-            return ["Unknown"]
+            return ["POI.Unknown"]
 
     def _load_poi_data(self, stop_data):
         """
@@ -353,42 +355,29 @@ class DataProcessor:
                 Contains the number of each POI types around each stop.
         """
         # extract neighbouring POIs using conflation tool
-        stop_id = stop_data['StopID']
-        num_poi = []
+        poi_data = stop_data['StopID'].to_frame(name='StopID')
+        poi_data['NumPOIs'] = 0
         placetype_df = pd.DataFrame()
         for i in range(len(stop_data)):
             nearby_poi = self.conflation_tool.extract_poi(lat=stop_data.loc[i, 'StopLat'],
                                                           lng=stop_data.loc[i, 'StopLon'],
                                                           stop_id=stop_data.loc[i, 'StopID'])
             if nearby_poi is None:
-                num_poi.append(0)
-                placetype_df = placetype_df.append(pd.Series(), ignore_index=True)
+                placetype_df = placetype_df.append(pd.Series(dtype=object), ignore_index=True)
 
             else:
-                num_poi.append(len(nearby_poi))
+                poi_data.loc[i, 'NumPOIs'] = len(nearby_poi)
 
                 # extract all place types
                 placetype_list = pd.Series([mapped_placetype
                                             for placetype in nearby_poi['properties.place_type'].tolist()
                                             for mapped_placetype in self._place_type_mapping(placetype)])
-                placetype_df = placetype_df.append(placetype_list.value_counts().T, ignore_index=True)
+                placetype_series = placetype_list.value_counts() / (placetype_list.value_counts().sum() + 1e-9)
+                placetype_df = placetype_df.append(placetype_series.T, ignore_index=True)
 
-        assert len(placetype_df) == len(stop_id)
-        assert len(placetype_df) == len(num_poi)
-        poi_data = pd.concat([stop_id, placetype_df.fillna(value=0)], axis=1)
-        poi_data['NumPOIs'] = num_poi
+        assert len(placetype_df) == len(poi_data)
+        poi_data = pd.concat([poi_data, placetype_df.fillna(value=0)], axis=1)
         return poi_data
-
-    def perform_feature_extraction(self):
-        # perform train test split
-        #TODO
-
-        # feature extraction for stop activities by other drivers
-        # TODO
-
-        # feature extraction for past stop activities
-        # TODO
-        return None
 
     def process_batch_data(self, batch_num):
         """
@@ -418,7 +407,7 @@ class DataProcessor:
         landuse_data = self.landuse_data
 
         # load POI data
-        # poi_data = self._load_poi_data(verified_stops.head(n=2))
+        poi_data = self._load_poi_data(verified_stops)
 
         # merge trip data
         batch_trip_data = verified_trips.merge(operation_data,
@@ -433,12 +422,18 @@ class DataProcessor:
                                                right_on='Driver.ID',
                                                left_on='DriverID')
         batch_stop_data.drop(columns=['Driver.ID'], inplace=True)
+
         batch_stop_data = gpd.GeoDataFrame(batch_stop_data,
                                            geometry=gpd.points_from_xy(batch_stop_data['StopLon'],
                                                                        batch_stop_data['StopLat']),
                                            crs=4326)
         batch_stop_data = gpd.sjoin(batch_stop_data, landuse_data, how="left", op='intersects')
         batch_stop_data.drop(columns=['index_right'], inplace=True)
+
+        batch_stop_data = batch_stop_data.merge(poi_data,
+                                                how='left',
+                                                on='StopID')
+        batch_stop_data.loc[:, 'NumPOIs':] = batch_stop_data.loc[:, 'NumPOIs':].fillna(0)
 
         # store processed batch data and combined data locally
         if not os.path.exists(os.path.join(os.path.dirname(__file__), config['processed_data_directory'])):
@@ -465,18 +460,17 @@ class DataProcessor:
                                          index=False,
                                          encoding='utf-8')
 
-        # return verified_trips, verified_stops, operation_data, landuse_data, batch_trip_data, batch_stop_data  #TODO remove
+        # return verified_trips, verified_stops, operation_data, landuse_data, batch_trip_data, batch_stop_data, poi_data  #TODO remove
 
 
 if __name__ == '__main__':
     processor = DataProcessor()
-    # verified_trips, verified_stops, operation_data, landuse_data, batch_trip_data, batch_stop_data = processor.process_batch_data(batch_num=1)
+    # verified_trips, verified_stops, operation_data, landuse_data, batch_trip_data, batch_stop_data, poi_data = processor.process_batch_data(batch_num=1)
     processor.process_batch_data(batch_num=1)
-    processor.process_batch_data(batch_num=2)
-    processor.process_batch_data(batch_num=3)
-    processor.process_batch_data(batch_num=4)
-    processor.process_batch_data(batch_num=5)
-    processor.process_batch_data(batch_num=6)
-    processor.process_batch_data(batch_num=7)
-    processor.process_batch_data(batch_num=8)
-    # processor.perform_feature_extraction()
+    # processor.process_batch_data(batch_num=2)
+    # processor.process_batch_data(batch_num=3)
+    # processor.process_batch_data(batch_num=4)
+    # processor.process_batch_data(batch_num=5)
+    # processor.process_batch_data(batch_num=6)
+    # processor.process_batch_data(batch_num=7)
+    # processor.process_batch_data(batch_num=8)
