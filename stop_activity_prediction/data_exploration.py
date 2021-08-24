@@ -32,6 +32,9 @@ class DataExplorer:
         self.place_types = ['ContainerYard', 'DistributionCenter', 'Natural', 'IntermediateStorage',
                             'Facility', 'Residence', 'Park', 'Headquarter', 'Warehouse', 'Construction',
                             'Unknown', 'Transfer', 'Factory', 'Retail']
+        self.colours = ["#1f77b4", "#aec7e8", "#ff7f0e", "#ffbb78", "#2ca02c", "#98df8a",
+                        "#d62728", "#ff9896", "#9467bd", "#c5b0d5", "#8c564b", "#c49c94", "#e377c2",
+                        "#f7b6d2", "#7f7f7f", "#c7c7c7", "#bcbd22", "#dbdb8d", "#17becf", "#9edae5"]
 
         # create data analysis folder if not found
         if not os.path.exists(config['data_analysis_directory']):
@@ -185,7 +188,7 @@ class DataExplorer:
         activity_df_transp = activity_df.set_index('index').T
 
         # plot graph
-        activity_df_transp.plot(figsize=(12, 10))
+        activity_df_transp.plot(figsize=(12, 10), color=self.colours, lw=3)
         # title, legend, labels
         plt.title('Temporal Distribution of each Activity Type\n')
         plt.legend(self.mapped_activity_types, loc='upper center', bbox_to_anchor=(0.5, -0.05), ncol=6)
@@ -211,7 +214,7 @@ class DataExplorer:
         # plot bars
         left = len(grouped_activity) * [0]
         for idx, name in enumerate(fields):
-            plt.barh(grouped_activity.index, grouped_activity[name], left=left)
+            plt.barh(grouped_activity.index, grouped_activity[name], left=left, color=self.colours[idx])
             left = left + grouped_activity[name]
         # title, legend, labels
         plt.title('Activity Frequency vs Day of Week\n')
@@ -244,7 +247,7 @@ class DataExplorer:
         # plot bars
         left = len(activity_df) * [0]
         for idx, name in enumerate(fields):
-            plt.barh(activity_df.index, activity_df[name], left=left)
+            plt.barh(activity_df.index, activity_df[name], left=left, color=self.colours[idx])
             left = left + activity_df[name]
         # title, legend, labels
         plt.title('Place Type Distribution vs Activity Type\n')
@@ -278,7 +281,7 @@ class DataExplorer:
         # plot bars
         left = len(activity_df) * [0]
         for idx, name in enumerate(activity_df.columns):
-            plt.barh(activity_df.index, activity_df[name], left=left)
+            plt.barh(activity_df.index, activity_df[name], left=left, color=self.colours[idx])
             left = left + activity_df[name]
         # title, legend, labels
         plt.title('Land Use Type Distribution vs Activity Type\n')
@@ -294,8 +297,8 @@ class DataExplorer:
 if __name__ == '__main__':
     explorer = DataExplorer()
     stop_data = explorer.stop_data
-    # explorer.calculate_trip_statistics()
-    # explorer.calculate_stop_statistics()
+    explorer.calculate_trip_statistics()
+    explorer.calculate_stop_statistics()
     explorer.plot_activity_dayofweek()
     explorer.plot_activity_placetype()
     explorer.plot_activity_landuse()
