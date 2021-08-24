@@ -293,6 +293,35 @@ class DataExplorer:
         ax.xaxis.grid(color='gray', linestyle='dashed')
         plt.show()
 
+    def plot_activity_vehicletype(self):
+        """
+        Plots the distribution of each activity type based on vehicle type.
+        """
+        # remove duplicated stops
+        stop_data = self.stop_data.drop_duplicates(subset=['StopID']).reset_index(drop=True)
+
+        fields = ['MappedActivity.{}'.format(activity_type) for activity_type in self.mapped_activity_types]
+        grouped_activity = stop_data.groupby('VehicleType').sum()[fields]
+        grouped_activity = grouped_activity.div(grouped_activity.sum(axis=1), axis=0)
+        labels = self.mapped_activity_types
+
+        # figure and axis
+        fig, ax = plt.subplots(1, figsize=(12, 10))
+        # plot bars
+        left = len(grouped_activity) * [0]
+        for idx, name in enumerate(fields):
+            plt.barh(grouped_activity.index, grouped_activity[name], left=left, color=self.colours[idx])
+            left = left + grouped_activity[name]
+        # title, legend, labels
+        plt.title('Activity Frequency vs Vehicle Type\n')
+        plt.legend(labels, loc='upper center', bbox_to_anchor=(0.5, -0.05), ncol=6)
+        plt.xlabel('Percentage')
+        # adjust limits and draw grid lines
+        plt.ylim(-0.5, ax.get_yticks()[-1] + 0.5)
+        ax.set_axisbelow(True)
+        ax.xaxis.grid(color='gray', linestyle='dashed')
+        plt.show()
+
 
 if __name__ == '__main__':
     explorer = DataExplorer()
@@ -303,4 +332,5 @@ if __name__ == '__main__':
     explorer.plot_activity_placetype()
     explorer.plot_activity_landuse()
     explorer.plot_activity_starttime()
+    explorer.plot_activity_vehicletype()
 
