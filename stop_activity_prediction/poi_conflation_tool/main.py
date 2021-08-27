@@ -5,20 +5,20 @@ import geopandas as gpd
 import pyproj
 import glob
 import numpy as np
-from .googlemap import GoogleMapScrapper
-from .heremap import HereMapScrapper
-from .onemap import OneMap
-from .osm import OSM
-from .sla import SLA
+from poi_conflation_tool.googlemap import GoogleMapScrapper
+from poi_conflation_tool.heremap import HereMapScrapper
+from poi_conflation_tool.onemap import OneMap
+from poi_conflation_tool.osm import OSM
+from poi_conflation_tool.sla import SLA
 from shapely.geometry import Point
 from shapely.ops import transform
-from .model import Model
+from poi_conflation_tool.model import Model
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 from fuzzywuzzy.fuzz import token_set_ratio, ratio
 from joblib import load
 from shapely import geometry
-from .util import divide_bounding_box, pixelise_region
+from poi_conflation_tool.util import divide_bounding_box, pixelise_region
 from copy import deepcopy
 
 # load config file
@@ -217,7 +217,9 @@ class POIConflationTool:
             conflated_pois = self._perform_conflation(combined_pois)
 
             # cache conflated POIs
-            if self.conflated_data is None:
+            if (self.conflated_data is None) and (conflated_pois is None):
+                continue
+            elif self.conflated_data is None:
                 self.conflated_data = conflated_pois
             else:
                 self.conflated_data = pd.concat([self.conflated_data, conflated_pois], ignore_index=True)
@@ -244,26 +246,26 @@ class POIConflationTool:
             Contains the conflated POIs.
         """
         # create circular buffer around POI
-        buffer = self._buffer_in_meters(lng, lat, config['search_radius'])
+        buffer = self._buffer_in_meters(float(lng), float(lat), config['search_radius'])
 
         # extracts neighbouring POIs from OSM
         osm_pois = self.osm_data[self.osm_data.intersects(buffer)]
-        #
-        # # extract neighbouring POIs from OneMap
+
+        # extract neighbouring POIs from OneMap
         onemap_pois = self.onemap_data[self.onemap_data.intersects(buffer)]
-        #
-        # # extract neighbouring POIs from SLA
+
+        # extract neighbouring POIs from SLA
         sla_pois = self.sla_data[self.sla_data.intersects(buffer)]
 
-        # extract neighbouring POIs from GoogleMap either locally or using API
-        if (self.google_data is not None) and (stop_id in self.google_data['stop'].tolist()):
-            google_pois = self.google_data[self.google_data['stop'] == stop_id]
-        else:
-            google_pois = self.google_scrapper.extract_poi(lat, lng, stop_id)
-            if self.google_data is None:
-                self.google_data = google_pois
-            else:
-                self.google_data = pd.concat([self.google_data, google_pois], ignore_index=True)
+        # extract neighbouring POIs from GoogleMap either locally or using API  #TODO needs to be updated
+        # if (self.google_data is not None) and (stop_id in self.google_data['stop'].tolist()):
+        #     google_pois = self.google_data[self.google_data['stop'] == stop_id]
+        # else:
+        #     google_pois = self.google_scrapper.extract_poi(lat, lng, stop_id)
+        #     if self.google_data is None:
+        #         self.google_data = google_pois
+        #     else:
+        #         self.google_data = pd.concat([self.google_data, google_pois], ignore_index=True)
 
         # extract neighbouring POIs from HERE Map either locally or using API
         if (self.here_data is not None) and (stop_id in self.here_data['stop'].tolist()):
@@ -277,15 +279,26 @@ class POIConflationTool:
 
         # perform conflation
         combined_pois = pd.concat([osm_pois, onemap_pois, sla_pois,
-                                   google_pois, here_pois], ignore_index=True)
+                                   here_pois], ignore_index=True)  #TODO remove
+        # combined_pois = pd.concat([osm_pois, onemap_pois, sla_pois,
+        #                            google_pois, here_pois], ignore_index=True)
+
+        if len(combined_pois) == 0:
+            return None
+
         conflated_pois = self._perform_conflation(combined_pois)
 
         # cache conflated POIs
-        self.conflated_data = pd.concat([self.conflated_data, conflated_pois], ignore_index=True)
-        if 'duplicates' in self.conflated_data.columns:
+        if (conflated_pois is None) and (self.conflated_data is None):
+            pass
+        elif self.conflated_data is None:
+            self.conflated_data = conflated_pois
+        else:
+            self.conflated_data = pd.concat([self.conflated_data, conflated_pois], ignore_index=True)
+        if (self.conflated_data is not None) and ('duplicates' in self.conflated_data.columns):
             self.conflated_data.drop(columns=['duplicates'], inplace=True)
-        self.conflated_data.to_file(os.path.join(os.path.dirname(__file__), config['conflated_cache']),
-                                    encoding='utf-8')
+            self.conflated_data.to_file(os.path.join(os.path.dirname(__file__), config['conflated_cache']),
+                                        encoding='utf-8')
 
         return conflated_pois
 
@@ -308,6 +321,7 @@ class POIConflationTool:
         # vectorise address information
         if len(potential_duplicates) > 1:
             address_corpus = potential_duplicates['properties.address'].fillna('Singapore').tolist()
+            address_corpus = [address if address != '' else 'Singapore' for address in address_corpus]
             address_vectorizer = TfidfVectorizer(analyzer='char_wb', ngram_range=(2, 3))
             address_matrix = address_vectorizer.fit_transform(address_corpus)
 
@@ -588,13 +602,16 @@ class POIConflationTool:
 
 # if __name__ == '__main__':
     # extracting POIs based on subzones
-    # tool = POIConflationTool(subzones=['QUEENSTOWN'])
+    # tool = POIConflationTool(subzones=['JURONG EAST'])
     # tool.conflate_area_poi()
+    # data = tool.conflated_data
 
     # extracting POIs on the fly
     # tool = POIConflationTool()
-    # data = pd.read_excel('data/hvp_data/combined_stop_data.xlsx')
+    # data = pd.read_excel('../../data/processed_data/combined_stop_data.xlsx')
     # for i in range(len(data)):
+    #     if i < 44081:
+    #         continue
     #     print('Processing {}/{}'.format(i+1, len(data)))
     #     tool.extract_poi(data.loc[i, 'StopLat'],
     #                      data.loc[i, 'StopLon'],
