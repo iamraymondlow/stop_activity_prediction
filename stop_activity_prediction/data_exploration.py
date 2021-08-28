@@ -32,6 +32,9 @@ class DataExplorer:
         self.place_types = ['ContainerYard', 'DistributionCenter', 'Natural', 'IntermediateStorage',
                             'Facility', 'Residence', 'Park', 'Headquarter', 'Warehouse', 'Construction',
                             'Unknown', 'Transfer', 'Factory', 'Retail']
+        self.poi_types = ['emergency_services', 'government', 'Unknown', 'food', 'lodging', 'recreation',
+                          'religion', 'retail', 'parking', 'services', 'healthcare', 'school', 'gas_station',
+                          'cemetry', 'transport']
         self.colours = ["#1f77b4", "#aec7e8", "#ff7f0e", "#ffbb78", "#2ca02c", "#98df8a",
                         "#d62728", "#ff9896", "#9467bd", "#c5b0d5", "#8c564b", "#c49c94", "#e377c2",
                         "#f7b6d2", "#7f7f7f", "#c7c7c7", "#bcbd22", "#dbdb8d", "#17becf", "#9edae5"]
@@ -322,6 +325,40 @@ class DataExplorer:
         ax.xaxis.grid(color='gray', linestyle='dashed')
         plt.show()
 
+    def plot_activity_poitype(self):
+        """
+        Plots the distribution of each POI place type based on the activity conducted.
+        """
+        # remove duplicated stops
+        stop_data = self.stop_data.drop_duplicates(subset=['StopID']).reset_index(drop=True)
+
+        fields = ['POI.{}'.format(poi_type) for poi_type in self.poi_types]
+        activity_df = pd.DataFrame()
+        for activity_type in self.mapped_activity_types:
+            filtered_data = stop_data[stop_data['MappedActivity.{}'.format(activity_type)] == 1].reset_index(drop=True)
+            summed_poitype = filtered_data.sum()[fields]
+            normalised_poitype = (summed_poitype * 100) / (summed_poitype.sum() + 1e-9)
+            activity_df = activity_df.append(normalised_poitype.T, ignore_index=True)
+        activity_df.index = self.mapped_activity_types
+
+        # figure and axis
+        fig, ax = plt.subplots(1, figsize=(12, 10))
+        # plot bars
+        left = len(activity_df) * [0]
+        for idx, name in enumerate(fields):
+            plt.barh(activity_df.index, activity_df[name], left=left, color=self.colours[idx])
+            left = left + activity_df[name]
+        # title, legend, labels
+        plt.title('POI Type Distribution vs Activity Type\n')
+        labels = [poi_type.replace('_', ' ').title() for poi_type in self.poi_types]
+        plt.legend(labels, loc='upper center', bbox_to_anchor=(0.5, -0.05), ncol=6)
+        plt.xlabel('Percentage')
+        # adjust limits and draw grid lines
+        plt.ylim(-0.5, ax.get_yticks()[-1] + 0.5)
+        ax.set_axisbelow(True)
+        ax.xaxis.grid(color='gray', linestyle='dashed')
+        plt.show()
+
 
 if __name__ == '__main__':
     explorer = DataExplorer()
@@ -333,4 +370,5 @@ if __name__ == '__main__':
     explorer.plot_activity_landuse()
     explorer.plot_activity_starttime()
     explorer.plot_activity_vehicletype()
+    explorer.plot_activity_poitype()
 
