@@ -346,19 +346,22 @@ class DataProcessor:
         else:
             return ["POI.Unknown"]
 
-    def _load_poi_data(self, stop_data):
+    def _load_poi_data(self, stop_data, batch_num):
         """
         Extracts the nearby POIs and calculates the number of different place types at each stop.
 
         Return:
             poi_data: pd.DataFrame
                 Contains the number of each POI types around each stop.
+            batch_num: int
+                Contains the batch number
         """
         # extract neighbouring POIs using conflation tool
         poi_data = stop_data['StopID'].to_frame(name='StopID')
         poi_data['NumPOIs'] = 0
         placetype_df = pd.DataFrame()
         for i in range(len(stop_data)):
+            print('Loading POI data for Batch {}, {}/{}'.format(batch_num, (i+1), len(stop_data)))
             nearby_poi = self.conflation_tool.extract_poi(lat=stop_data.loc[i, 'StopLat'],
                                                           lng=stop_data.loc[i, 'StopLon'],
                                                           stop_id=stop_data.loc[i, 'StopID'])
@@ -395,7 +398,6 @@ class DataProcessor:
 
         # remove trip data related to buses
         verified_trips = self._remove_bus_data(verified_trips)
-        # verified_trips = verified_trips[verified_trips['DriverID'] == verified_trips['DriverID'].unique()[0]].reset_index(drop=True) #TODO remove
 
         # extract verified stop information
         verified_stops = self._extract_verified_stops(verified_trips, batch_num)
@@ -407,7 +409,7 @@ class DataProcessor:
         landuse_data = self.landuse_data
 
         # load POI data
-        poi_data = self._load_poi_data(verified_stops)
+        poi_data = self._load_poi_data(verified_stops, batch_num)
 
         # merge trip data
         batch_trip_data = verified_trips.merge(operation_data,
@@ -460,17 +462,14 @@ class DataProcessor:
                                          index=False,
                                          encoding='utf-8')
 
-        # return verified_trips, verified_stops, operation_data, landuse_data, batch_trip_data, batch_stop_data, poi_data  #TODO remove
-
 
 if __name__ == '__main__':
     processor = DataProcessor()
-    # verified_trips, verified_stops, operation_data, landuse_data, batch_trip_data, batch_stop_data, poi_data = processor.process_batch_data(batch_num=1)
     processor.process_batch_data(batch_num=1)
-    # processor.process_batch_data(batch_num=2)
-    # processor.process_batch_data(batch_num=3)
-    # processor.process_batch_data(batch_num=4)
-    # processor.process_batch_data(batch_num=5)
-    # processor.process_batch_data(batch_num=6)
-    # processor.process_batch_data(batch_num=7)
-    # processor.process_batch_data(batch_num=8)
+    processor.process_batch_data(batch_num=2)
+    processor.process_batch_data(batch_num=3)
+    processor.process_batch_data(batch_num=4)
+    processor.process_batch_data(batch_num=5)
+    processor.process_batch_data(batch_num=6)
+    processor.process_batch_data(batch_num=7)
+    processor.process_batch_data(batch_num=8)
