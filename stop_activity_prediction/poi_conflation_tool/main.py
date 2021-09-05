@@ -47,17 +47,18 @@ class POIConflationTool:
 
         # load locally cached POIs that was conflated in the past
         print('Loading conflated data from local directory...')
-        if subzones is None:
-            if not os.path.exists(os.path.join(os.path.dirname(__file__), config['conflated_cache'])):
-                if not os.path.exists(os.path.join(os.path.dirname(__file__), config['conflated_directory'])):
-                    os.makedirs(os.path.join(os.path.dirname(__file__), config['conflated_directory']))
-                self.conflated_data = None
-            else:
-                self.conflated_data = gpd.read_file(os.path.join(os.path.dirname(__file__),
-                                                                 config['conflated_cache']),
-                                                    encoding='utf-8')
-        else:
-            self.conflated_data = None
+        self.conflated_data = None  #TODO need fixing
+        # if subzones is None:
+        #     if not os.path.exists(os.path.join(os.path.dirname(__file__), config['conflated_cache'])):
+        #         if not os.path.exists(os.path.join(os.path.dirname(__file__), config['conflated_directory'])):
+        #             os.makedirs(os.path.join(os.path.dirname(__file__), config['conflated_directory']))
+        #         self.conflated_data = None
+        #     else:
+        #         self.conflated_data = gpd.read_file(os.path.join(os.path.dirname(__file__),
+        #                                                          config['conflated_cache']),
+        #                                             encoding='utf-8')
+        # else:
+        #     self.conflated_data = None
 
         # load formatted OneMap data. If it does not exist, format and load data.
         print('Loading OneMap data from local directory...')
@@ -295,10 +296,10 @@ class POIConflationTool:
             self.conflated_data = conflated_pois
         else:
             self.conflated_data = pd.concat([self.conflated_data, conflated_pois], ignore_index=True)
-        if (self.conflated_data is not None) and ('duplicates' in self.conflated_data.columns):
-            self.conflated_data.drop(columns=['duplicates'], inplace=True)
-            self.conflated_data.to_file(os.path.join(os.path.dirname(__file__), config['conflated_cache']),
-                                        encoding='utf-8')
+        # if (self.conflated_data is not None) and ('duplicates' in self.conflated_data.columns):  #TODO need fixing
+        #     self.conflated_data.drop(columns=['duplicates'], inplace=True)
+        #     self.conflated_data.to_file(os.path.join(os.path.dirname(__file__), config['conflated_cache']),
+        #                                 encoding='utf-8')
 
         return conflated_pois
 
