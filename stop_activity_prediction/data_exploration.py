@@ -176,9 +176,9 @@ class DataExplorer:
             activity_str: str
                 Contains the activities conducted at a particular stop in the form of a string.
         """
-        activity_list = [key.replace('Activity.', '')
+        activity_list = [key.replace('MappedActivity.', '')
                          for key, value in series_row.items()
-                         if ('Activity.' in key) and (value == 1)]
+                         if ('MappedActivity.' in key) and (value == 1)]
         activity_str = ','.join(activity_list)
         return activity_str
 
@@ -193,7 +193,7 @@ class DataExplorer:
         self._plot_bar_graph_multicol('PlaceType', 'Place Type', data='stop')
 
         # activity type breakdown
-        self._plot_bar_graph_multicol('Activity', 'Activity Type', data='stop')
+        self._plot_bar_graph_multicol('MappedActivity', 'Activity Type', data='stop')
 
         # activity type subset breakdown
         self.stop_data['ActivityType'] = self.stop_data.apply(self._extract_activity_type, axis=1)
@@ -202,7 +202,7 @@ class DataExplorer:
             index=True)
 
         # stop duration distribution based on activity types
-        filtered_stop_data = self.stop_data[self.stop_data['ActivityType'].isin(self.activity_types)]
+        filtered_stop_data = self.stop_data[self.stop_data['ActivityType'].isin(self.mapped_activity_types)]
         sns.boxplot(y='Duration', x='ActivityType', data=filtered_stop_data, showfliers=False)
         plt.ylabel('Stop Duration (s)')
         plt.xticks(rotation=90)
