@@ -30,20 +30,19 @@ class DataLoader:
                                             config['processed_data_directory'] + 'batch_stop_data_1.xlsx'))
         batch2 = pd.read_excel(os.path.join(os.path.dirname(__file__),
                                             config['processed_data_directory'] + 'batch_stop_data_2.xlsx'))
-        # batch3 = pd.read_excel(os.path.join(os.path.dirname(__file__),
-        #                                     config['processed_data_directory'] + 'batch_stop_data_3.xlsx'))
-        # batch4 = pd.read_excel(os.path.join(os.path.dirname(__file__),
-        #                                     config['processed_data_directory'] + 'batch_stop_data_4.xlsx'))
-        # batch5 = pd.read_excel(os.path.join(os.path.dirname(__file__),
-        #                                     config['processed_data_directory'] + 'batch_stop_data_5.xlsx'))
-        # batch6 = pd.read_excel(os.path.join(os.path.dirname(__file__),
-        #                                     config['processed_data_directory'] + 'batch_stop_data_6.xlsx'))
-        # batch7 = pd.read_excel(os.path.join(os.path.dirname(__file__),
-        #                                     config['processed_data_directory'] + 'batch_stop_data_7.xlsx'))
-        # batch8 = pd.read_excel(os.path.join(os.path.dirname(__file__),
-        #                                     config['processed_data_directory'] + 'batch_stop_data_8.xlsx'))
-        # self.data = pd.concat([batch1, batch2, batch3, batch4, batch5, batch6, batch7, batch8], ignore_index=True)
-        self.data = pd.concat([batch1, batch2], ignore_index=True)
+        batch3 = pd.read_excel(os.path.join(os.path.dirname(__file__),
+                                            config['processed_data_directory'] + 'batch_stop_data_3.xlsx'))
+        batch4 = pd.read_excel(os.path.join(os.path.dirname(__file__),
+                                            config['processed_data_directory'] + 'batch_stop_data_4.xlsx'))
+        batch5 = pd.read_excel(os.path.join(os.path.dirname(__file__),
+                                            config['processed_data_directory'] + 'batch_stop_data_5.xlsx'))
+        batch6 = pd.read_excel(os.path.join(os.path.dirname(__file__),
+                                            config['processed_data_directory'] + 'batch_stop_data_6.xlsx'))
+        batch7 = pd.read_excel(os.path.join(os.path.dirname(__file__),
+                                            config['processed_data_directory'] + 'batch_stop_data_7.xlsx'))
+        batch8 = pd.read_excel(os.path.join(os.path.dirname(__file__),
+                                            config['processed_data_directory'] + 'batch_stop_data_8.xlsx'))
+        self.data = pd.concat([batch1, batch2, batch3, batch4, batch5, batch6, batch7, batch8], ignore_index=True)
 
     def check_stop_order(self, data):
         """
@@ -116,9 +115,11 @@ class DataLoader:
                 other_driver_activities = other_driver_activities.append(pd.Series(dtype=object), ignore_index=True)
             else:
                 activity_cols = [col for col in nearby_stops.columns
-                                 if ('Activity.' in col) and ('MappedActivity.' not in col)]
+                                 if ('Activity.' in col)
+                                 and ('MappedActivity.' not in col)
+                                 and ('Other.' not in col)]
                 mapped_activity_cols = [col for col in nearby_stops.columns
-                                        if 'MappedActivity.' in col]
+                                        if ('MappedActivity.' in col) and ('Other.' not in col)]
 
                 # calculate distribution of activities conducted near the stop
                 summed_activity = nearby_stops.sum()[activity_cols]
@@ -176,9 +177,12 @@ class DataLoader:
                     past_activities = past_activities.append(pd.Series({'Activity.Shift': 0}), ignore_index=True)
                 else:
                     activity_cols = [col for col in nearby_stops.columns
-                                     if ('Activity.' in col) and ('MappedActivity.' not in col)]
+                                     if ('Activity.' in col) and
+                                     ('MappedActivity.' not in col) and
+                                     ('Other.' not in col)]
                     mapped_activity_cols = [col for col in nearby_stops.columns
-                                            if 'MappedActivity.' in col]
+                                            if ('MappedActivity.' in col) and
+                                            ('Other.' not in col)]
 
                     # calculate distribution of activities conducted near the stop
                     summed_activity = nearby_stops.sum()[activity_cols]
@@ -252,11 +256,9 @@ class DataLoader:
             (os.path.exists(os.path.join(os.path.dirname(__file__),
                                          config['processed_data_directory'] + 'test_data.xlsx'))):
             train_data = pd.read_excel(os.path.join(os.path.dirname(__file__),
-                                                    config['processed_data_directory'] + 'train_data.xlsx'),
-                                       encoding='utf-8')
+                                                    config['processed_data_directory'] + 'train_data.xlsx'))
             test_data = pd.read_excel(os.path.join(os.path.dirname(__file__),
-                                                   config['processed_data_directory'] + 'test_data.xlsx'),
-                                      encoding='utf-8')
+                                                   config['processed_data_directory'] + 'test_data.xlsx'))
 
             return train_data, test_data
 
@@ -315,10 +317,13 @@ class DataLoader:
         # drop irrelevant columns
         dropped_cols = ['StopLat', 'StopLon', 'Address', 'StartTime', 'EndTime', 'StopID',
                         'TripID', 'Stops', 'Travels', 'YMD', 'LandUseType', 'geometry',
-                        'VehicleType', 'DayOfWeekStr', 'MappedLandUseType']
-        retained_cols = [column for column in self.data.columns if column not in dropped_cols]
-        train_data = train_data[retained_cols]
-        test_data = test_data[retained_cols]
+                        'VehicleType', 'DayOfWeekStr', 'MappedLandUseType', 'LandUse.nan',
+                        'StopUnixTime']
+        retained_train_cols = [column for column in train_data.columns if column not in dropped_cols]
+        retained_test_cols = [column for column in test_data.columns if column not in dropped_cols]
+        assert retained_train_cols == retained_test_cols
+        train_data = train_data[retained_train_cols]
+        test_data = test_data[retained_test_cols]
 
         # save training and test dataset in local directory
         if not os.path.exists(os.path.join(os.path.dirname(__file__), config['processed_data_directory'])):
