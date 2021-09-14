@@ -342,4 +342,4 @@ class DataLoader:
 if __name__ == '__main__':
     extractor = DataLoader()
     data = extractor.data
-    train_data, test_data = extractor.train_test_split(test_ratio=0.3)
+    train_data, test_data = extractor.train_test_split(test_ratio=0.25)
