@@ -235,7 +235,7 @@ class DataLoader:
                                                for cat in encoder.get_feature_names(['X'])])
         return train_onehot_df, test_onehot_df
 
-    def train_test_split(self, test_ratio=0.3):
+    def train_test_split(self, test_ratio=0.25):
         """
         Performs train test split on the combined HVP dataset and performs feature extraction.
 
