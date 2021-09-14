@@ -19,10 +19,44 @@ class DataExplorer:
         Initialises the class object by storing the combined trip data and stop activity data
         as class attributes.
         """
-        self.trip_data = pd.read_excel(os.path.join(os.path.dirname(__file__),
-                                                    config['processed_data_directory'] + 'combined_trip_data.xlsx'))
-        self.stop_data = pd.read_excel(os.path.join(os.path.dirname(__file__),
-                                                    config['processed_data_directory'] + 'combined_stop_data.xlsx'))
+        # load stop data
+        batch1 = pd.read_excel(os.path.join(os.path.dirname(__file__),
+                                            config['processed_data_directory'] + 'batch_stop_data_1.xlsx'))
+        batch2 = pd.read_excel(os.path.join(os.path.dirname(__file__),
+                                            config['processed_data_directory'] + 'batch_stop_data_2.xlsx'))
+        batch3 = pd.read_excel(os.path.join(os.path.dirname(__file__),
+                                            config['processed_data_directory'] + 'batch_stop_data_3.xlsx'))
+        batch4 = pd.read_excel(os.path.join(os.path.dirname(__file__),
+                                            config['processed_data_directory'] + 'batch_stop_data_4.xlsx'))
+        batch5 = pd.read_excel(os.path.join(os.path.dirname(__file__),
+                                            config['processed_data_directory'] + 'batch_stop_data_5.xlsx'))
+        batch6 = pd.read_excel(os.path.join(os.path.dirname(__file__),
+                                            config['processed_data_directory'] + 'batch_stop_data_6.xlsx'))
+        batch7 = pd.read_excel(os.path.join(os.path.dirname(__file__),
+                                            config['processed_data_directory'] + 'batch_stop_data_7.xlsx'))
+        batch8 = pd.read_excel(os.path.join(os.path.dirname(__file__),
+                                            config['processed_data_directory'] + 'batch_stop_data_8.xlsx'))
+        self.stop_data = pd.concat([batch1, batch2, batch3, batch4, batch5, batch6, batch7, batch8], ignore_index=True)
+
+        # load trip data
+        trip1 = pd.read_excel(os.path.join(os.path.dirname(__file__),
+                                            config['processed_data_directory'] + 'batch_stop_data_1.xlsx'))
+        trip2 = pd.read_excel(os.path.join(os.path.dirname(__file__),
+                                            config['processed_data_directory'] + 'batch_stop_data_2.xlsx'))
+        trip3 = pd.read_excel(os.path.join(os.path.dirname(__file__),
+                                            config['processed_data_directory'] + 'batch_stop_data_3.xlsx'))
+        trip4 = pd.read_excel(os.path.join(os.path.dirname(__file__),
+                                            config['processed_data_directory'] + 'batch_stop_data_4.xlsx'))
+        trip5 = pd.read_excel(os.path.join(os.path.dirname(__file__),
+                                            config['processed_data_directory'] + 'batch_stop_data_5.xlsx'))
+        trip6 = pd.read_excel(os.path.join(os.path.dirname(__file__),
+                                            config['processed_data_directory'] + 'batch_stop_data_6.xlsx'))
+        trip7 = pd.read_excel(os.path.join(os.path.dirname(__file__),
+                                            config['processed_data_directory'] + 'batch_stop_data_7.xlsx'))
+        trip8 = pd.read_excel(os.path.join(os.path.dirname(__file__),
+                                            config['processed_data_directory'] + 'batch_stop_data_8.xlsx'))
+        self.trip_data = pd.concat([trip1, trip2, trip3, trip4, trip5, trip6, trip7, trip8], ignore_index=True)
+
         self.mapped_activity_types = ['DeliverCargo', 'PickupCargo', 'Other', 'Shift', 'Break',
                                       'DropoffTrailerContainer', 'PickupTrailerContainer', 'Maintenance']
         self.activity_types = ['DeliverCargo', 'PickupCargo', 'Other', 'Shift', 'ProvideService',
@@ -277,7 +311,6 @@ class DataExplorer:
             activity_df = activity_df.append(normalised_landuse_count.T, ignore_index=True)
         activity_df.index = self.mapped_activity_types
         activity_df.fillna(0, inplace=True)
-        print(activity_df.columns)
 
         # figure and axis
         fig, ax = plt.subplots(1, figsize=(12, 10))
