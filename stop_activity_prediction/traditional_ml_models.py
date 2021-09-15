@@ -1,5 +1,13 @@
+import os
+import json
+import glob
 from load_data import DataLoader
+from joblib import dump, load
 
+
+# load config file
+with open(os.path.join(os.path.dirname(__file__), '../config.json')) as f:
+    config = json.load(f)
 
 class MLModel:
     """
@@ -35,6 +43,7 @@ class MLModel:
         self.train_y = self.train_data[activity_cols]
         self.test_x = self.test_data[feature_cols]
         self.test_y = self.test_data[activity_cols]
+        self.model = None
 
     def train(self, algorithm=None):
         """
@@ -44,17 +53,19 @@ class MLModel:
             algorithm: str
                 Indicates the name of the algorithm used to train the model.
         """
-        # perform data sampling to balance class distribution
-        # TODO
-
         # train model
-        # print('Begin model training...')
+        model = None
         # gb_models = self._train(train_datasets, 'GB')
         # rf_models = self._train(train_datasets, 'RF')
         # xgboost_models = self._train(train_datasets, 'XGB')
 
         # save model
+        if not os.path.exists(os.path.join(os.path.dirname(__file__), config['activity_models_directory'])):
+            os.makedirs(os.path.join(os.path.dirname(__file__), config['activity_models_directory']))
 
+        dump(model, os.path.join(os.path.dirname(__file__),
+                                 config['activity_models_directory'] +
+                                 'model_{}.joblib'.format(algorithm)))
         return None
 
     def evaluate(self, algorithm=None):
@@ -65,6 +76,14 @@ class MLModel:
             algorithm: str
                 Indicates the name of the algorithm used to train the model.
         """
+        # load model
+        self.model = load(os.path.join(os.path.dirname(__file__),
+                                       config['activity_models_directory'] +
+                                       'model_{}.joblib'.format(algorithm)))
+
+        # evaluate model based on test set
+
+
         # evaluate model performance on hold out set
         # print('Perform model evaluation...')
         # y_pred_gb = self._predict(gb_models, test_data[['address_similarity', 'address_str_similarity',
