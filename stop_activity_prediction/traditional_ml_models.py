@@ -1,10 +1,14 @@
 import os
 import json
-import glob
 from load_data import DataLoader
 from joblib import dump, load
-from sklearn.metrics import accuracy_score, classification_report, f1_score, fbeta_score, hamming_loss, \
-    jaccard_score, multilabel_confusion_matrix, precision_recall_fscore_support, roc_auc_score, zero_one_loss
+from sklearn.metrics import accuracy_score, classification_report, f1_score, hamming_loss, \
+    jaccard_score, precision_recall_fscore_support, roc_auc_score, zero_one_loss
+from skmultilearn.problem_transform import ClassifierChain
+from sklearn.ensemble import ExtraTreesClassifier, RandomForestClassifier, GradientBoostingClassifier, \
+    AdaBoostClassifier
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.linear_model import LogisticRegression
 
 
 # load config file
@@ -47,19 +51,52 @@ class MLModel:
         self.test_y = self.test_data[activity_cols]
         self.model = None
 
-    def train(self, algorithm=None):
+    def _initialise_model(self, algorithm=None):
+        """
+        Initialise the corresponding class object based on the defined algorithm.
+
+        Parameters:
+            algorithm: str
+                Indicates the name of the algorithm used to train the model.
+        Returns:
+            model: sklearn object
+                The sklearn model object corresponding to the user-defined algorithm.
+        """
+        if algorithm == "RandomForest":
+            model = RandomForestClassifier(class_weight='balanced')
+        elif algorithm == "ExtraTrees":
+            model = ExtraTreesClassifier(class_weight='balanced')
+        elif algorithm == "KNN":
+            model = KNeighborsClassifier()
+        elif algorithm == "GradientBoost":
+            model = GradientBoostingClassifier()
+        elif algorithm == "AdaBoost":
+            model = AdaBoostClassifier()
+        elif algorithm == "MultinomialLogit":
+            model = LogisticRegression()
+        else:
+            raise ValueError('{} is not supported.'.format(algorithm))
+
+        return model
+
+    def train(self, algorithm=None, classifier_chain=True):
         """
         Trains a model on the training dataset using a user-defined ML algorithm supported by sklearn.
 
         Parameters:
             algorithm: str
                 Indicates the name of the algorithm used to train the model.
+            classifier_chain: bool
+                Indicates whether the problem will be transformed into a classifier chain
         """
         # train model
-        model = None
-        # gb_models = self._train(train_datasets, 'GB')
-        # rf_models = self._train(train_datasets, 'RF')
-        # xgboost_models = self._train(train_datasets, 'XGB')
+        model = self._initialise_model(algorithm)
+
+        if classifier_chain:
+            model = ClassifierChain(model)
+
+        # fit model on training data
+        model.fit(self.train_x, self.train_y)
 
         # save model
         if not os.path.exists(os.path.join(os.path.dirname(__file__), config['activity_models_directory'])):
@@ -72,7 +109,7 @@ class MLModel:
 
     def evaluate(self, algorithm=None):
         """
-        Evaluates the performnace of the trained model based on test dataset.
+        Evaluates the performance of the trained model based on test dataset.
 
         Parameters:
             algorithm: str
@@ -88,16 +125,16 @@ class MLModel:
 
         # generate evaluation scores
         print('algorithm: {}'.format(algorithm))
+        print('classes: {}'.format(self.model.classes_))
         print('accuracy: {}'.format(accuracy_score(self.test_y, test_pred)))
-        print('f1 score: {}'.format(f1_score(self.test_y, test_pred)))
-        print('fbeta score: {}'.format(fbeta_score(self.test_y, test_pred)))
+        print('f1 score: {}'.format(f1_score(self.test_y, test_pred, average=None)))
         print('hamming loss: {}'.format(hamming_loss(self.test_y, test_pred)))
-        print('jaccard score: {}'.format(jaccard_score(self.test_y, test_pred)))
+        print('jaccard score: {}'.format(jaccard_score(self.test_y, test_pred, average=None)))
         print('roc auc score: {}'.format(roc_auc_score(self.test_y, test_pred)))
         print('zero one loss: {}'.format(zero_one_loss(self.test_y, test_pred)))
-        print('precision recall fscore report: {}'.format(precision_recall_fscore_support(self.test_y, test_pred)))
+        print('precision recall fscore report: {}'.format(precision_recall_fscore_support(self.test_y, test_pred,
+                                                                                          average=None)))
         print('classification report: {}'.format(classification_report(self.test_y, test_pred)))
-        print('confusion matrix: {}'.format(multilabel_confusion_matrix(self.test_y, test_pred)))
         print()
         return None
 
@@ -111,22 +148,26 @@ if __name__ == '__main__':
     test_x = model.test_x
     test_y = model.test_y
 
-    # # gradient boosting
-    # model.train(algorithm='GB')
-    # model.evaluate(algorithm='GB')
-    #
-    # # decision tree with adaptive boosting
-    # model.train(algorithm='AB')
-    # model.evaluate(algorithm='AB')
-    #
-    # # random forest
-    # model.train(algorithm='RF')
-    # model.evaluate(algorithm='RF')
-    #
-    # # nested logit
-    # model.train(algorithm='NL')
-    # model.evaluate(algorithm='NL')
-    #
-    # # multinomial logit model
-    # model.train(algorithm='ML')
-    # model.evaluate(algorithm='ML')
+    # random forest
+    model.train(algorithm='RandomForest', classifier_chain=False)
+    model.evaluate(algorithm='RandomForest')
+
+    # extra trees
+    model.train(algorithm='ExtraTrees', classifier_chain=False)
+    model.evaluate(algorithm='ExtraTrees')
+
+    # KNN
+    model.train(algorithm='KNN', classifier_chain=False)
+    model.evaluate(algorithm='KNN')
+
+    # gradient boosting
+    model.train(algorithm='GradientBoost', classifier_chain=True)
+    model.evaluate(algorithm='GradientBoost')
+
+    # decision tree with adaptive boosting
+    model.train(algorithm='AdaBoost', classifier_chain=True)
+    model.evaluate(algorithm='AdaBoost')
+
+    # multinomial logit model
+    model.train(algorithm='MultinomialLogit', classifier_chain=True)
+    model.evaluate(algorithm='MultinomialLogit')
