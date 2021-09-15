@@ -3,6 +3,8 @@ import json
 import glob
 from load_data import DataLoader
 from joblib import dump, load
+from sklearn.metrics import accuracy_score, classification_report, f1_score, fbeta_score, hamming_loss, \
+    jaccard_score, multilabel_confusion_matrix, precision_recall_fscore_support, roc_auc_score, zero_one_loss
 
 
 # load config file
@@ -81,21 +83,22 @@ class MLModel:
                                        config['activity_models_directory'] +
                                        'model_{}.joblib'.format(algorithm)))
 
-        # evaluate model based on test set
+        # perform inference on test set
+        test_pred = self.model.predict(self.test_x)
 
-
-        # evaluate model performance on hold out set
-        # print('Perform model evaluation...')
-        # y_pred_gb = self._predict(gb_models, test_data[['address_similarity', 'address_str_similarity',
-        #                                                 'name_similarity']])
-        # y_pred_rf = self._predict(rf_models, test_data[['address_similarity', 'address_str_similarity',
-        #                                                 'name_similarity']])
-        # y_pred_xgboost = self._predict(xgboost_models, test_data[['address_similarity', 'address_str_similarity',
-        #                                                           'name_similarity']])
-        # self._evaluate(test_data['label'], y_pred_gb, 'Gradient Boosting')
-        # self._evaluate(test_data['label'], y_pred_rf, 'Random Forest')
-        # self._evaluate(test_data['label'], y_pred_xgboost, 'XGBoost')
-
+        # generate evaluation scores
+        print('algorithm: {}'.format(algorithm))
+        print('accuracy: {}'.format(accuracy_score(self.test_y, test_pred)))
+        print('f1 score: {}'.format(f1_score(self.test_y, test_pred)))
+        print('fbeta score: {}'.format(fbeta_score(self.test_y, test_pred)))
+        print('hamming loss: {}'.format(hamming_loss(self.test_y, test_pred)))
+        print('jaccard score: {}'.format(jaccard_score(self.test_y, test_pred)))
+        print('roc auc score: {}'.format(roc_auc_score(self.test_y, test_pred)))
+        print('zero one loss: {}'.format(zero_one_loss(self.test_y, test_pred)))
+        print('precision recall fscore report: {}'.format(precision_recall_fscore_support(self.test_y, test_pred)))
+        print('classification report: {}'.format(classification_report(self.test_y, test_pred)))
+        print('confusion matrix: {}'.format(multilabel_confusion_matrix(self.test_y, test_pred)))
+        print()
         return None
 
 
