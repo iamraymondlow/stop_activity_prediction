@@ -123,11 +123,11 @@ class DataLoader:
 
                 # calculate distribution of activities conducted near the stop
                 summed_activity = nearby_stops.sum()[activity_cols]
-                normalised_activity = (summed_activity * 100) / (summed_activity.sum() + 1e-9)
+                normalised_activity = (summed_activity) / (summed_activity.sum() + 1e-9)
 
                 # calculate distribution of mapped activities conducted near the stop
                 summed_mapped_activity = nearby_stops.sum()[mapped_activity_cols]
-                normalised_mapped_activity = (summed_mapped_activity * 100) / (summed_mapped_activity.sum() + 1e-9)
+                normalised_mapped_activity = (summed_mapped_activity) / (summed_mapped_activity.sum() + 1e-9)
 
                 # merge original and mapped activity types conducted by other drivers
                 other_driver_activities = other_driver_activities.append(pd.concat([normalised_activity,
@@ -186,11 +186,11 @@ class DataLoader:
 
                     # calculate distribution of activities conducted near the stop
                     summed_activity = nearby_stops.sum()[activity_cols]
-                    normalised_activity = (summed_activity * 100) / (summed_activity.sum() + 1e-9)
+                    normalised_activity = (summed_activity) / (summed_activity.sum() + 1e-9)
 
                     # calculate distribution of mapped activities conducted near the stop
                     summed_mapped_activity = nearby_stops.sum()[mapped_activity_cols]
-                    normalised_mapped_activity = (summed_mapped_activity * 100) / (summed_mapped_activity.sum() + 1e-9)
+                    normalised_mapped_activity = (summed_mapped_activity) / (summed_mapped_activity.sum() + 1e-9)
 
                     past_activities = past_activities.append(pd.concat([normalised_activity,
                                                                         normalised_mapped_activity]).T,
