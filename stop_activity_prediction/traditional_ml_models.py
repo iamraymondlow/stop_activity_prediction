@@ -1,9 +1,10 @@
 import os
 import json
+import pandas as pd
 from load_data import DataLoader
 from joblib import dump, load
-from sklearn.metrics import accuracy_score, classification_report, f1_score, hamming_loss, \
-    jaccard_score, precision_recall_fscore_support, roc_auc_score, zero_one_loss
+from sklearn.metrics import accuracy_score, classification_report, hamming_loss, \
+    jaccard_score, roc_auc_score, zero_one_loss
 from skmultilearn.problem_transform import ClassifierChain
 from sklearn.ensemble import ExtraTreesClassifier, RandomForestClassifier, GradientBoostingClassifier, \
     AdaBoostClassifier
@@ -124,17 +125,17 @@ class MLModel:
         test_pred = self.model.predict(self.test_x)
 
         # generate evaluation scores
-        print('algorithm: {}'.format(algorithm))
-        print('classes: {}'.format(self.model.classes_))
-        print('accuracy: {}'.format(accuracy_score(self.test_y, test_pred)))
-        print('f1 score: {}'.format(f1_score(self.test_y, test_pred, average=None)))
-        print('hamming loss: {}'.format(hamming_loss(self.test_y, test_pred)))
-        print('jaccard score: {}'.format(jaccard_score(self.test_y, test_pred, average=None)))
-        print('roc auc score: {}'.format(roc_auc_score(self.test_y, test_pred)))
-        print('zero one loss: {}'.format(zero_one_loss(self.test_y, test_pred)))
-        print('precision recall fscore report: {}'.format(precision_recall_fscore_support(self.test_y, test_pred,
-                                                                                          average=None)))
-        print('classification report: {}'.format(classification_report(self.test_y, test_pred)))
+        print('Algorithm: {}'.format(algorithm))
+        activity_labels = [col.replace('MappedActivity.', '') for col in self.train_y.columns]
+        test_pred = pd.DataFrame(test_pred, columns=self.train_y.columns)
+        print('Classes: {}'.format(activity_labels))
+        print('Accuracy: {}'.format(accuracy_score(self.test_y, test_pred)))
+        print('Hamming Loss: {}'.format(hamming_loss(self.test_y, test_pred)))
+        print('Jaccard Score: {}'.format(jaccard_score(self.test_y, test_pred, average=None)))
+        print('ROC AUC Score: {}'.format(roc_auc_score(self.test_y, test_pred)))
+        print('Zero One Loss: {}'.format(zero_one_loss(self.test_y, test_pred)))
+        print('Classification Report:')
+        print(classification_report(self.test_y, test_pred, target_names=activity_labels, zero_division=0))
         print()
         return None
 
