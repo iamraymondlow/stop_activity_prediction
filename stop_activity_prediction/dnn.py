@@ -5,17 +5,22 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 import matplotlib.pyplot as plt
+import argparse
 from load_data import DataLoader
-from joblib import dump, load
 from sklearn.metrics import accuracy_score, classification_report, f1_score, hamming_loss, \
     jaccard_score, precision_recall_fscore_support, roc_auc_score, zero_one_loss
 from tqdm import tqdm
 
-
-
 # load config file
 with open(os.path.join(os.path.dirname(__file__), '../config.json')) as f:
     config = json.load(f)
+
+# load parameters
+parser = argparse.ArgumentParser()
+parser.add_argument("--train_model", type=bool, default=True)
+parser.add_argument("--eval_model", type=bool, default=True)
+args = parser.parse_args()
+
 
 class DeepNeuralNetwork(nn.Module):
     """
@@ -23,36 +28,8 @@ class DeepNeuralNetwork(nn.Module):
     """
     def __init__(self):
         """
-        Initialises the model object by loading the training and test datasets as well as the DNN layers.
+        Initialises the DNN model architecture.
         """
-        # load training and test datasets
-        loader = DataLoader()
-        self.train_data, self.test_data = loader.train_test_split(test_ratio=0.25)
-
-        # define features of interest
-        features = ['DriverID', 'Duration', 'StartHour', 'DayOfWeek.', 'PlaceType.', 'Commodity.',
-                    'SpecialCargo.', 'Company.Type.', 'Industry.', 'VehicleType.', 'NumPOIs', 'POI.',
-                    'LandUse.', 'Other.MappedActivity.', 'Past.MappedActivity.']
-        feature_cols = [col
-                        for col in self.train_data.columns
-                        for feature in features
-                        if feature in col]
-        # original activity types
-        # activity_cols = ['Activity.PickupTrailer', 'Activity.Passenger', 'Activity.Fueling', 'Activity.OtherWork',
-        #                  'Activity.DropoffTrailer', 'Activity.Resting', 'Activity.Personal', 'Activity.Shift',
-        #                  'Activity.ProvideService', 'Activity.DropoffContainer', 'Activity.Queuing', 'Activity.Other',
-        #                  'Activity.DeliverCargo', 'Activity.Maintenance', 'Activity.Fail', 'Activity.PickupCargo',
-        #                  'Activity.Meal', 'Activity.PickupContainer']
-        # mapped activity types
-        activity_cols = ['MappedActivity.DeliverCargo', 'MappedActivity.PickupCargo', 'MappedActivity.Other',
-                         'MappedActivity.Shift', 'MappedActivity.Break', 'MappedActivity.DropoffTrailerContainer',
-                         'MappedActivity.PickupTrailerContainer', 'MappedActivity.Maintenance']
-
-        self.train_x = self.train_data[feature_cols]
-        self.train_y = self.train_data[activity_cols]
-        self.test_x = self.test_data[feature_cols]
-        self.test_y = self.test_data[activity_cols]
-
         # initialise model layers (4 fully connected layers and 8/18 heads serving as binary classifiers)
         super(DeepNeuralNetwork, self).__init__()
         self.fc1 = nn.Linear(len(self.train_x.columns), 32)
@@ -98,9 +75,9 @@ class DeepNeuralNetwork(nn.Module):
 
         return out1, out2, out3, out4, out5, out6, out7, out8
 
-    def _calculate_loss(self, output, target):
+    def calculate_loss(self, output, target):
         """
-        Performs forward pass through the layers.
+        Calculates the loss value for each activity class and finds the average.
 
         Parameters:
             output: tensor
@@ -123,61 +100,162 @@ class DeepNeuralNetwork(nn.Module):
         loss8 = nn.BCELoss()(out8, t8)
         return (loss1 + loss2 + loss3 + loss4 + loss5 + loss6 + loss7 + loss8) / 5
 
-    def train(self, algorithm=None, classifier_chain=True):
-        """
-        Trains a model on the training dataset using a user-defined ML algorithm supported by sklearn.
 
-        Parameters:
-            algorithm: str
-                Indicates the name of the algorithm used to train the model.
-            classifier_chain: bool
-                Indicates whether the problem will be transformed into a classifier chain
-        """
-        # initialise model
+def train(model, optimiser, input_features, target, device):
+    """
+    Train the model in batches for one epoch.
+    """
+    model.train()
+    train_loss = 0.0
+    for i in tqdm(range(len(input_features) // config['batch_size'])):
+        batch_features = input_features.iloc[i*config['batch_size']: (i+1)*config['batch_size']].to(device)
+        batch_target = target.iloc[i * config['batch_size']: (i + 1) * config['batch_size']]
+        delivercargo_target = batch_target['MappedActivity.DeliverCargo'].to(device)
+        pickupcargo_target = batch_target['MappedActivity.PickupCargo'].to(device)
+        other_target = batch_target['MappedActivity.Other'].to(device)
+        shift_target = batch_target['MappedActivity.Shift'].to(device)
+        break_target = batch_target['MappedActivity.Break'].to(device)
+        dropofftrailer_target = batch_target['MappedActivity.DropoffTrailerContainer'].to(device)
+        pickuptrailer_target = batch_target['MappedActivity.PickupTrailerContainer'].to(device)
+        maintenance_target = batch_target['MappedActivity.Maintenance'].to(device)
 
-        # fit model on training data
+        # reset optimiser gradient to zero
+        optimiser.zero_grad()
 
-        # save model
-        if not os.path.exists(os.path.join(os.path.dirname(__file__), config['activity_models_directory'])):
-            os.makedirs(os.path.join(os.path.dirname(__file__), config['activity_models_directory']))
+        # perform inference
+        output = model(batch_features)
+        target = (delivercargo_target, pickupcargo_target, other_target, shift_target,
+                  break_target, dropofftrailer_target, pickuptrailer_target, maintenance_target)
+        loss = model.calculate_loss(output, target)
+        train_loss += loss.item()
 
-        return None
+        # perform backpropagation
+        loss.backward()
 
-    def evaluate(self, algorithm=None):
-        """
-        Evaluates the performance of the trained model based on test dataset.
+        # update model parameters
+        optimiser.step()
 
-        Parameters:
-            algorithm: str
-                Indicates the name of the algorithm used to train the model.
-        """
-        # load model
-        self.model = load(os.path.join(os.path.dirname(__file__),
-                                       config['activity_models_directory'] +
-                                       'model_{}.joblib'.format(algorithm)))
+    # find the average loss of all batches in this epoch
+    train_loss = train_loss / (i + 1)
+    return train_loss
 
-        # perform inference on test set
-        test_pred = self.model.predict(self.test_x)
 
-        # generate evaluation scores
-        print('algorithm: {}'.format(algorithm))
-        print('classes: {}'.format(self.model.classes_))
-        print('accuracy: {}'.format(accuracy_score(self.test_y, test_pred)))
-        print('f1 score: {}'.format(f1_score(self.test_y, test_pred, average=None)))
-        print('hamming loss: {}'.format(hamming_loss(self.test_y, test_pred)))
-        print('jaccard score: {}'.format(jaccard_score(self.test_y, test_pred, average=None)))
-        print('roc auc score: {}'.format(roc_auc_score(self.test_y, test_pred)))
-        print('zero one loss: {}'.format(zero_one_loss(self.test_y, test_pred)))
-        print('precision recall fscore report: {}'.format(precision_recall_fscore_support(self.test_y, test_pred,
-                                                                                          average=None)))
-        print('classification report: {}'.format(classification_report(self.test_y, test_pred)))
-        print()
-        return None
+def plot_train_loss(train_loss):
+    """
+    Plot training loss and save figure locally.
+    """
+    plt.figure(figsize=(10, 7))
+    plt.plot(train_loss, color='orange')
+    plt.xlabel('Epochs')
+    plt.ylabel('Cross-entropy Loss')
+    plt.title('Training Loss for Deep Neural Network')
+
+    if not os.path.exists(os.path.join(os.path.dirname(__file__), config['figures_directory'])):
+        os.makedirs(os.path.join(os.path.dirname(__file__), config['figures_directory']))
+
+    plt.savefig(os.path.join(os.path.dirname(__file__),
+                             config['figures_directory'] + 'DNN_train_loss.png'))
+    plt.show()
+
+
+def inference(test_features):
+    """
+    Performs inference on the test features.
+    """
+    test_features = test_features.to(device)
+    outputs = model(test_features)
+
+    # get all the labels
+    all_labels = []
+    for out in outputs:
+        if out >= 0.5:
+            all_labels.append(1)
+        else:
+            all_labels.append(0)
+
+    return all_labels
+
+
+def evaluate(test_y, test_pred):
+    """
+    Evaluates the performance of the trained model based on test dataset.
+    """
+    # generate evaluation scores
+    print('Deep Neural Network')
+    print('classes: {}'.format(activity_cols))
+    print('accuracy: {}'.format(accuracy_score(test_y, test_pred)))
+    print('f1 score: {}'.format(f1_score(test_y, test_pred, average=None)))
+    print('hamming loss: {}'.format(hamming_loss(test_y, test_pred)))
+    print('jaccard score: {}'.format(jaccard_score(test_y, test_pred, average=None)))
+    print('roc auc score: {}'.format(roc_auc_score(test_y, test_pred)))
+    print('zero one loss: {}'.format(zero_one_loss(test_y, test_pred)))
+    print('precision recall fscore report: {}'.format(precision_recall_fscore_support(test_y, test_pred,
+                                                                                      average=None)))
+    print('classification report: {}'.format(classification_report(test_y, test_pred)))
+    return None
 
 
 if __name__ == '__main__':
-    model = DeepNeuralNetwork()
+    # load training and test datasets
+    loader = DataLoader()
+    train_data, test_data = loader.train_test_split(test_ratio=0.25)
 
-    # train and evaluate model performance
-    model.train()
-    model.evaluate()
+    # define features of interest
+    features = ['DriverID', 'Duration', 'StartHour', 'DayOfWeek.', 'PlaceType.', 'Commodity.',
+                'SpecialCargo.', 'Company.Type.', 'Industry.', 'VehicleType.', 'NumPOIs', 'POI.',
+                'LandUse.', 'Other.MappedActivity.', 'Past.MappedActivity.']
+    feature_cols = [col
+                    for col in train_data.columns
+                    for feature in features
+                    if feature in col]
+    # original activity types
+    # activity_cols = ['Activity.PickupTrailer', 'Activity.Passenger', 'Activity.Fueling', 'Activity.OtherWork',
+    #                  'Activity.DropoffTrailer', 'Activity.Resting', 'Activity.Personal', 'Activity.Shift',
+    #                  'Activity.ProvideService', 'Activity.DropoffContainer', 'Activity.Queuing', 'Activity.Other',
+    #                  'Activity.DeliverCargo', 'Activity.Maintenance', 'Activity.Fail', 'Activity.PickupCargo',
+    #                  'Activity.Meal', 'Activity.PickupContainer']
+    # mapped activity types
+    activity_cols = ['MappedActivity.DeliverCargo', 'MappedActivity.PickupCargo', 'MappedActivity.Other',
+                     'MappedActivity.Shift', 'MappedActivity.Break', 'MappedActivity.DropoffTrailerContainer',
+                     'MappedActivity.PickupTrailerContainer', 'MappedActivity.Maintenance']
+
+    train_x = train_data[feature_cols]
+    train_y = train_data[activity_cols]
+    test_x = test_data[feature_cols]
+    test_y = test_data[activity_cols]
+
+    if args.train_model:  # perform model training
+        # initialise model architecture
+        model = DeepNeuralNetwork()
+
+        # initialise optimiser and learning parameters
+        optimiser = optim.Adam(params=model.parameters(), lr=config['learning_rate'])
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        model.to(device)  # load the model into the device (i.e., CPU or CUDA)
+
+        # train model
+        epoch_train_loss = []
+        for epoch in range(config['epochs']):
+            print('Epoch {}/{}'.format(epoch, config['epochs']))
+            epoch_loss = train(model, optimiser, train_x, train_y, device)
+            epoch_train_loss.append(epoch_loss)
+            print('Epoch loss: {}'.format(epoch_loss))
+
+        # save trained model
+        torch.save(model.state_dict(),
+                   os.path.join(os.path.dirname(__file__),
+                                config['activity_models_directory'] + 'model_DNN.pth'))
+
+        # plot train loss graph
+        plot_train_loss(epoch_train_loss)
+
+    if args.eval_model:  # perform inference on test dataset and evaluate model performance
+        model = DeepNeuralNetwork()
+        model.load_state_dict(torch.load(os.path.join(os.path.dirname(__file__),
+                                                      config['activity_models_directory'] + 'model_DNN.pth')))
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        model.to(device)
+        model.eval()
+
+        test_pred = inference(test_x)
+        evaluate(test_y, test_pred)
