@@ -4,18 +4,13 @@ from load_data import DataLoader
 from joblib import dump, load
 from sklearn.metrics import accuracy_score, classification_report, f1_score, hamming_loss, \
     jaccard_score, precision_recall_fscore_support, roc_auc_score, zero_one_loss
-from skmultilearn.problem_transform import ClassifierChain
-from sklearn.ensemble import ExtraTreesClassifier, RandomForestClassifier, GradientBoostingClassifier, \
-    AdaBoostClassifier
-from sklearn.neighbors import KNeighborsClassifier
-from sklearn.linear_model import LogisticRegression
 
 
 # load config file
 with open(os.path.join(os.path.dirname(__file__), '../config.json')) as f:
     config = json.load(f)
 
-class MLModel:
+class DNN:
     """
     Trains and evaluates the performance of traditional ML models based on the training and test dataset.
     """
@@ -51,34 +46,6 @@ class MLModel:
         self.test_y = self.test_data[activity_cols]
         self.model = None
 
-    def _initialise_model(self, algorithm=None):
-        """
-        Initialise the corresponding class object based on the defined algorithm.
-
-        Parameters:
-            algorithm: str
-                Indicates the name of the algorithm used to train the model.
-        Returns:
-            model: sklearn object
-                The sklearn model object corresponding to the user-defined algorithm.
-        """
-        if algorithm == "RandomForest":
-            model = RandomForestClassifier(class_weight='balanced')
-        elif algorithm == "ExtraTrees":
-            model = ExtraTreesClassifier(class_weight='balanced')
-        elif algorithm == "KNN":
-            model = KNeighborsClassifier()
-        elif algorithm == "GradientBoost":
-            model = GradientBoostingClassifier()
-        elif algorithm == "AdaBoost":
-            model = AdaBoostClassifier()
-        elif algorithm == "MultinomialLogit":
-            model = LogisticRegression()
-        else:
-            raise ValueError('{} is not supported.'.format(algorithm))
-
-        return model
-
     def train(self, algorithm=None, classifier_chain=True):
         """
         Trains a model on the training dataset using a user-defined ML algorithm supported by sklearn.
@@ -90,21 +57,13 @@ class MLModel:
                 Indicates whether the problem will be transformed into a classifier chain
         """
         # initialise model
-        model = self._initialise_model(algorithm)
-
-        if classifier_chain:
-            model = ClassifierChain(model)
 
         # fit model on training data
-        model.fit(self.train_x, self.train_y)
 
         # save model
         if not os.path.exists(os.path.join(os.path.dirname(__file__), config['activity_models_directory'])):
             os.makedirs(os.path.join(os.path.dirname(__file__), config['activity_models_directory']))
 
-        dump(model, os.path.join(os.path.dirname(__file__),
-                                 config['activity_models_directory'] +
-                                 'model_{}.joblib'.format(algorithm)))
         return None
 
     def evaluate(self, algorithm=None):
@@ -140,34 +99,8 @@ class MLModel:
 
 
 if __name__ == '__main__':
-    model = MLModel()
-    train_data = model.train_data
-    test_data = model.test_data
-    train_x = model.train_x
-    train_y = model.train_y
-    test_x = model.test_x
-    test_y = model.test_y
+    model = DNN()
 
-    # random forest
-    model.train(algorithm='RandomForest', classifier_chain=False)
-    model.evaluate(algorithm='RandomForest')
-
-    # extra trees
-    model.train(algorithm='ExtraTrees', classifier_chain=False)
-    model.evaluate(algorithm='ExtraTrees')
-
-    # KNN
-    model.train(algorithm='KNN', classifier_chain=False)
-    model.evaluate(algorithm='KNN')
-
-    # gradient boosting
-    model.train(algorithm='GradientBoost', classifier_chain=True)
-    model.evaluate(algorithm='GradientBoost')
-
-    # decision tree with adaptive boosting
-    model.train(algorithm='AdaBoost', classifier_chain=True)
-    model.evaluate(algorithm='AdaBoost')
-
-    # multinomial logit model
-    model.train(algorithm='MultinomialLogit', classifier_chain=True)
-    model.evaluate(algorithm='MultinomialLogit')
+    # train and evaluate model performance
+    model.train()
+    model.evaluate()
