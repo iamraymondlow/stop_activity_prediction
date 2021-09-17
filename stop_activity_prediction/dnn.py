@@ -7,6 +7,7 @@ import torch.optim as optim
 import matplotlib.pyplot as plt
 import argparse
 import pandas as pd
+import numpy as np
 from load_data import DataLoader
 from sklearn.metrics import accuracy_score, classification_report, hamming_loss, \
     jaccard_score, roc_auc_score, zero_one_loss
@@ -199,16 +200,17 @@ def inference(test_features):
         all_labels: list
             Contains the activity labels inferred by the model based on the test features.
     """
-    test_features = torch.tensor(test_features.values).to(device)
-    outputs = model(test_features.float())
+    test_features = torch.tensor(test_features.values).float().to(device)
+    outputs = model(test_features)
 
     # get all the labels
-    all_labels = []
+    all_labels = None
     for out in outputs:
-        if out >= 0.5:
-            all_labels.append(1)
+        out = out.cpu().detach().numpy()
+        if all_labels is None:
+            all_labels = np.where(out < 0.5, 0, 1)
         else:
-            all_labels.append(0)
+            all_labels = np.hstack((all_labels, np.where(out < 0.5, 0, 1)))
 
     return all_labels
 
@@ -234,7 +236,7 @@ def evaluate(test_y, test_pred):
     print('ROC AUC Score: {}'.format(roc_auc_score(test_y, test_pred)))
     print('Zero One Loss: {}'.format(zero_one_loss(test_y, test_pred)))
     print('Classification Report:')
-    print(classification_report(test_y, test_pred, target_names=activity_labels))
+    print(classification_report(test_y, test_pred, target_names=activity_labels, zero_division=0))
     return None
 
 
