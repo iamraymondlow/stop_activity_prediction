@@ -1,7 +1,6 @@
 import os
 import json
 import pandas as pd
-import scipy
 from load_data import DataLoader
 from joblib import dump, load
 from sklearn.metrics import accuracy_score, classification_report, hamming_loss, \
