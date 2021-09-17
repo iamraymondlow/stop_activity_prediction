@@ -1,6 +1,7 @@
 import os
 import json
 import pandas as pd
+import scipy
 from load_data import DataLoader
 from joblib import dump, load
 from sklearn.metrics import accuracy_score, classification_report, hamming_loss, \
@@ -31,8 +32,7 @@ class MLModel:
         features = ['DriverID', 'Duration', 'StartHour', 'DayOfWeek.', 'PlaceType.', 'Commodity.',
                     'SpecialCargo.', 'Company.Type.', 'Industry.', 'VehicleType.', 'NumPOIs', 'POI.',
                     'LandUse.', 'Other.MappedActivity.', 'Past.MappedActivity.']
-        feature_cols = [col
-                        for col in self.train_data.columns
+        feature_cols = [col for col in self.train_data.columns
                         for feature in features
                         if feature in col]
         # original activity types
@@ -94,7 +94,7 @@ class MLModel:
         model = self._initialise_model(algorithm)
 
         if classifier_chain:
-            model = ClassifierChain(model)
+            model = ClassifierChain(model, require_dense=True)
 
         # fit model on training data
         model.fit(self.train_x, self.train_y)
@@ -108,13 +108,15 @@ class MLModel:
                                  'model_{}.joblib'.format(algorithm)))
         return None
 
-    def evaluate(self, algorithm=None):
+    def evaluate(self, algorithm=None, classifier_chain=False):
         """
         Evaluates the performance of the trained model based on test dataset.
 
         Parameters:
             algorithm: str
                 Indicates the name of the algorithm used to train the model.
+            classifier_chain: bool
+                Indicates whether the problem will be transformed into a classifier chain
         """
         # load model
         self.model = load(os.path.join(os.path.dirname(__file__),
@@ -127,12 +129,22 @@ class MLModel:
         # generate evaluation scores
         print('Algorithm: {}'.format(algorithm))
         activity_labels = [col.replace('MappedActivity.', '') for col in self.train_y.columns]
-        test_pred = pd.DataFrame(test_pred, columns=self.train_y.columns)
+        if classifier_chain:
+            test_pred = pd.DataFrame.sparse.from_spmatrix(test_pred, columns=self.train_y.columns).astype(int)
+        else:
+            test_pred = pd.DataFrame(test_pred, columns=self.train_y.columns)
+
+        print('test_pred: {}'.format(type(test_pred)))
+        print('self.test_y: {}'.format(type(self.test_y)))
+        print('test_pred sparse: {}'.format(scipy.sparse.issparse(test_pred)))
+        print('self.test_y sparse: {}'.format(scipy.sparse.issparse(self.test_y)))
+        print('test_pred: {}'.format(test_pred))
+        print('self.test_y: {}'.format(self.test_y))
         print('Classes: {}'.format(activity_labels))
         print('Accuracy: {}'.format(accuracy_score(self.test_y, test_pred)))
         print('Hamming Loss: {}'.format(hamming_loss(self.test_y, test_pred)))
         print('Jaccard Score: {}'.format(jaccard_score(self.test_y, test_pred, average=None)))
-        print('ROC AUC Score: {}'.format(roc_auc_score(self.test_y, test_pred)))
+        print('ROC AUC Score: {}'.format(roc_auc_score(self.test_y.values, test_pred.values, average=None)))
         print('Zero One Loss: {}'.format(zero_one_loss(self.test_y, test_pred)))
         print('Classification Report:')
         print(classification_report(self.test_y, test_pred, target_names=activity_labels, zero_division=0))
@@ -151,24 +163,24 @@ if __name__ == '__main__':
 
     # random forest
     model.train(algorithm='RandomForest', classifier_chain=False)
-    model.evaluate(algorithm='RandomForest')
+    model.evaluate(algorithm='RandomForest', classifier_chain=False)
 
     # extra trees
     model.train(algorithm='ExtraTrees', classifier_chain=False)
-    model.evaluate(algorithm='ExtraTrees')
+    model.evaluate(algorithm='ExtraTrees', classifier_chain=False)
 
     # KNN
     model.train(algorithm='KNN', classifier_chain=False)
-    model.evaluate(algorithm='KNN')
+    model.evaluate(algorithm='KNN', classifier_chain=False)
 
     # gradient boosting
     model.train(algorithm='GradientBoost', classifier_chain=True)
-    model.evaluate(algorithm='GradientBoost')
+    model.evaluate(algorithm='GradientBoost', classifier_chain=True)
 
     # decision tree with adaptive boosting
     model.train(algorithm='AdaBoost', classifier_chain=True)
-    model.evaluate(algorithm='AdaBoost')
+    model.evaluate(algorithm='AdaBoost', classifier_chain=True)
 
     # multinomial logit model
     model.train(algorithm='MultinomialLogit', classifier_chain=True)
-    model.evaluate(algorithm='MultinomialLogit')
+    model.evaluate(algorithm='MultinomialLogit', classifier_chain=True)
