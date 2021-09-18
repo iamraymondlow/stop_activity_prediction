@@ -21,16 +21,17 @@ with open(os.path.join(os.path.dirname(__file__), '../config.json')) as f:
 parser = argparse.ArgumentParser()
 parser.add_argument("--train_model", type=bool, default=True)
 parser.add_argument("--eval_model", type=bool, default=True)
+parser.add_argument("--dropout", type=float, default=0.5)
 args = parser.parse_args()
 
 
 class DeepNeuralNetwork(nn.Module):
     """
-    Trains and evaluates the performance of a DNN models based on the training and test dataset.
+    Defines the architecture of a deep neural network.
     """
     def __init__(self, num_features):
         """
-        Initialises the DNN model architecture. 4 fully connected layers and 8/18 binary output nodes
+        Initialises the DNN model architecture. 5 fully connected layers and 8/18 binary output nodes
         for each activity class.
 
         Parameters:
@@ -38,19 +39,22 @@ class DeepNeuralNetwork(nn.Module):
                 Number of input features that will be passed into the model.
         """
         super(DeepNeuralNetwork, self).__init__()
-        self.fc1 = nn.Linear(num_features, 32)
-        self.fc2 = nn.Linear(32, 64)
-        self.fc3 = nn.Linear(64, 128)
-        self.fc4 = nn.Linear(128, 256)
+        self.fc1 = nn.Linear(num_features, 128)
+        self.fc2 = nn.Linear(128, 64)
+        self.fc3 = nn.Linear(64, 32)
+        self.fc4 = nn.Linear(32, 16)
+        self.fc5 = nn.Linear(16, 8)
 
-        self.out1 = nn.Linear(256, 1)
-        self.out2 = nn.Linear(256, 1)
-        self.out3 = nn.Linear(256, 1)
-        self.out4 = nn.Linear(256, 1)
-        self.out5 = nn.Linear(256, 1)
-        self.out6 = nn.Linear(256, 1)
-        self.out7 = nn.Linear(256, 1)
-        self.out8 = nn.Linear(256, 1)
+        self.out1 = nn.Linear(8, 1)
+        self.out2 = nn.Linear(8, 1)
+        self.out3 = nn.Linear(8, 1)
+        self.out4 = nn.Linear(8, 1)
+        self.out5 = nn.Linear(8, 1)
+        self.out6 = nn.Linear(8, 1)
+        self.out7 = nn.Linear(8, 1)
+        self.out8 = nn.Linear(8, 1)
+
+        self.dropout = nn.Dropout(args.dropout)
 
     def forward(self, x):
         """
@@ -64,10 +68,16 @@ class DeepNeuralNetwork(nn.Module):
             out1, out2, out3, out4, out5, out6, out7, out8: torch.tensor
                 Model output for each activity class.
         """
-        x = F.relu(self.fc1(x))
-        x = F.relu(self.fc2(x))
-        x = F.relu(self.fc3(x))
-        x = F.relu(self.fc4(x))
+        x = F.leaky_relu(self.fc1(x))
+        x = self.dropout(x)
+        x = F.leaky_relu(self.fc2(x))
+        x = self.dropout(x)
+        x = F.leaky_relu(self.fc3(x))
+        x = self.dropout(x)
+        x = F.leaky_relu(self.fc4(x))
+        x = self.dropout(x)
+        x = F.leaky_relu(self.fc5(x))
+        x = self.dropout(x)
 
         # each binary classifier head will have its own output
         out1 = torch.sigmoid(self.out1(x))
@@ -92,8 +102,8 @@ class DeepNeuralNetwork(nn.Module):
             target: torch.tensor
                 Target outputs.
         Returns:
-            ave_loss: float
-                Binary cross entropy loss of model output.
+            sum_loss: float
+                Binary cross entropy loss of model output for all activity classes.
         """
         out1, out2, out3, out4, out5, out6, out7, out8 = output
         t1, t2, t3, t4, t5, t6, t7, t8 = target
@@ -105,8 +115,10 @@ class DeepNeuralNetwork(nn.Module):
         loss6 = nn.BCELoss()(out6, torch.reshape(t6, (-1, 1))).float()
         loss7 = nn.BCELoss()(out7, torch.reshape(t7, (-1, 1))).float()
         loss8 = nn.BCELoss()(out8, torch.reshape(t8, (-1, 1))).float()
-        ave_loss = (loss1 + loss2 + loss3 + loss4 + loss5 + loss6 + loss7 + loss8) / 8
-        return ave_loss
+
+        sum_loss = loss1 + loss2 + loss3 + loss4 + \
+                   loss5 + loss6 + loss7 + loss8
+        return sum_loss
 
 
 def train(model, optimiser, train_features, train_target, device):
@@ -232,8 +244,10 @@ def evaluate(test_y, test_pred):
     print('Classes: {}'.format(activity_labels))
     print('Accuracy: {}'.format(accuracy_score(test_y, test_pred)))
     print('Hamming Loss: {}'.format(hamming_loss(test_y, test_pred)))
-    print('Jaccard Score: {}'.format(jaccard_score(test_y, test_pred, average=None)))
-    print('ROC AUC Score: {}'.format(roc_auc_score(test_y, test_pred)))
+    print('Jaccard Score')
+    print(jaccard_score(test_y, test_pred, average=None))
+    print('ROC AUC Score')
+    print(roc_auc_score(test_y, test_pred))
     print('Zero One Loss: {}'.format(zero_one_loss(test_y, test_pred)))
     print('Classification Report:')
     print(classification_report(test_y, test_pred, target_names=activity_labels, zero_division=0))
@@ -301,5 +315,10 @@ if __name__ == '__main__':
         model.to(device)
         model.eval()
 
+        train_pred = inference(train_x)
+        print('train result')
+        evaluate(train_y, train_pred)
+
         test_pred = inference(test_x)
+        print('test result')
         evaluate(test_y, test_pred)
