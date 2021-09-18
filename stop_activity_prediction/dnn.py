@@ -29,17 +29,17 @@ class DeepNeuralNetwork(nn.Module):
     """
     Defines the architecture of a deep neural network.
     """
-    def __init__(self, num_features):
+    def __init__(self, input_dim):
         """
         Initialises the DNN model architecture. 5 fully connected layers and 8/18 binary output nodes
         for each activity class.
 
         Parameters:
-            num_features: int
+            input_dim: int
                 Number of input features that will be passed into the model.
         """
         super(DeepNeuralNetwork, self).__init__()
-        self.fc1 = nn.Linear(num_features, 128)
+        self.fc1 = nn.Linear(input_dim, 128)
         self.fc2 = nn.Linear(128, 64)
         self.fc3 = nn.Linear(64, 32)
         self.fc4 = nn.Linear(32, 16)
