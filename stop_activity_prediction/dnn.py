@@ -23,6 +23,7 @@ parser.add_argument("--name", type=str, default='DNN')
 parser.add_argument("--train_model", type=bool, default=True)
 parser.add_argument("--eval_model", type=bool, default=True)
 parser.add_argument("--dropout", type=float, default=0.5)
+parser.add_argument("--output_dim", type=int, default=1)
 args = parser.parse_args()
 
 
@@ -46,20 +47,20 @@ class DeepNeuralNetwork(nn.Module):
         self.fc4 = nn.Linear(32, 16)
         self.fc5 = nn.Linear(16, 8)
 
-        self.out1 = nn.Linear(8, 1)
-        self.out2 = nn.Linear(8, 1)
-        self.out3 = nn.Linear(8, 1)
-        self.out4 = nn.Linear(8, 1)
-        self.out5 = nn.Linear(8, 1)
-        self.out6 = nn.Linear(8, 1)
-        self.out7 = nn.Linear(8, 1)
-        self.out8 = nn.Linear(8, 1)
+        self.out1 = nn.Linear(8, args.output_dim)
+        self.out2 = nn.Linear(8, args.output_dim)
+        self.out3 = nn.Linear(8, args.output_dim)
+        self.out4 = nn.Linear(8, args.output_dim)
+        self.out5 = nn.Linear(8, args.output_dim)
+        self.out6 = nn.Linear(8, args.output_dim)
+        self.out7 = nn.Linear(8, args.output_dim)
+        self.out8 = nn.Linear(8, args.output_dim)
 
         self.dropout = nn.Dropout(args.dropout)
 
     def forward(self, x):
         """
-        Performs forward pass through the layers.
+        Performs forward pass through the DNN layers.
 
         Parameters:
             x: torch.tensor
@@ -80,7 +81,7 @@ class DeepNeuralNetwork(nn.Module):
         x = F.leaky_relu(self.fc5(x))
         x = self.dropout(x)
 
-        # each binary classifier head will have its own output
+        # a binary classifier output node for each activity class
         out1 = torch.sigmoid(self.out1(x))
         out2 = torch.sigmoid(self.out2(x))
         out3 = torch.sigmoid(self.out3(x))
@@ -95,7 +96,7 @@ class DeepNeuralNetwork(nn.Module):
 
     def calculate_loss(self, output, target):
         """
-        Calculates the loss value for each activity class and finds the average.
+        Calculates the loss value for each activity class and sums them up.
 
         Parameters:
             output: torch.tensor
@@ -117,8 +118,7 @@ class DeepNeuralNetwork(nn.Module):
         loss7 = nn.BCELoss()(out7, torch.reshape(t7, (-1, 1))).float()
         loss8 = nn.BCELoss()(out8, torch.reshape(t8, (-1, 1))).float()
 
-        sum_loss = loss1 + loss2 + loss3 + loss4 + \
-                   loss5 + loss6 + loss7 + loss8
+        sum_loss = loss1 + loss2 + loss3 + loss4 + loss5 + loss6 + loss7 + loss8
         return sum_loss
 
 
@@ -127,7 +127,7 @@ def train(model, optimiser, train_features, train_target, device):
     Train the model in batches for one epoch.
 
     Parameters:
-        model: DeepNeuralNetwork
+        model: DeepNeuralNetwork object
             Contains the model architecture of the DNN.
         optimiser: optimiser.Adam
             Contains the optimiser for the model.
@@ -175,7 +175,7 @@ def train(model, optimiser, train_features, train_target, device):
         optimiser.step()
 
     # find the average loss of all batches in this epoch
-    train_loss = train_loss / (i + 1)
+    train_loss = train_loss / (len(train_features) // config['batch_size'])
     return train_loss
 
 
@@ -191,30 +191,31 @@ def plot_train_loss(train_loss):
     plt.plot(train_loss, color='orange')
     plt.xlabel('Epochs')
     plt.ylabel('Cross-entropy Loss')
-    plt.title('Training Loss for Deep Neural Network')
 
     if not os.path.exists(os.path.join(os.path.dirname(__file__), config['figures_directory'])):
         os.makedirs(os.path.join(os.path.dirname(__file__), config['figures_directory']))
 
     plt.savefig(os.path.join(os.path.dirname(__file__),
-                             config['figures_directory'] + 'DNN_train_loss.png'))
+                             config['figures_directory'] + 'train_loss_{}.png'.format(args.name)))
     plt.show()
 
 
-def inference(test_features):
+def inference(model, input_features):
     """
-    Performs inference on the test features.
+    Performs inference on the input features.
 
     Parameters:
-        test_features:
-            Contains the training loss for each epoch.
+        model: DeepNeuralNetwork object
+            Contains the model architecture of the DNN model.
+        input_features:
+            Contains the input features to be pased into the model for inference.
 
     Returns:
         all_labels: list
-            Contains the activity labels inferred by the model based on the test features.
+            Contains the activity labels inferred by the model based on the input features.
     """
-    test_features = torch.tensor(test_features.values).float().to(device)
-    outputs = model(test_features)
+    input_features = torch.tensor(input_features.values).float().to(device)
+    outputs = model(input_features)
 
     # get all the labels
     all_labels = None
@@ -228,30 +229,30 @@ def inference(test_features):
     return all_labels
 
 
-def evaluate(test_y, test_pred):
+def evaluate(true_labels, pred_labels):
     """
-    Evaluates the performance of the trained model based on test dataset.
+    Evaluates the performance of the trained model based on different multi-label classification metrics.
 
     Parameters:
-        test_y: pd.Dataframe
-            Contains the target labels for the test dataset.
-        test_pred: torch.tensor
-            Contains the model's predicted labels for the test dataset.
+        true_labels: pd.Dataframe
+            Contains the target labels.
+        pred_labels: torch.tensor
+            Contains the model's predicted labels.
     """
     # generate evaluation scores
     print('Deep Neural Network')
-    activity_labels = [col.replace('MappedActivity.', '') for col in test_y.columns]
-    test_pred = pd.DataFrame(test_pred, columns=test_y.columns)
+    activity_labels = [col.replace('MappedActivity.', '') for col in true_labels.columns]
+    pred_labels = pd.DataFrame(pred_labels, columns=true_labels.columns)
     print('Classes: {}'.format(activity_labels))
-    print('Accuracy: {}'.format(accuracy_score(test_y, test_pred)))
-    print('Hamming Loss: {}'.format(hamming_loss(test_y, test_pred)))
+    print('Accuracy: {}'.format(accuracy_score(true_labels, pred_labels)))
+    print('Hamming Loss: {}'.format(hamming_loss(true_labels, pred_labels)))
     print('Jaccard Score')
-    print(jaccard_score(test_y, test_pred, average=None))
+    print(jaccard_score(true_labels, pred_labels, average=None))
     print('ROC AUC Score')
-    print(roc_auc_score(test_y, test_pred))
-    print('Zero One Loss: {}'.format(zero_one_loss(test_y, test_pred)))
+    print(roc_auc_score(true_labels, pred_labels))
+    print('Zero One Loss: {}'.format(zero_one_loss(true_labels, pred_labels)))
     print('Classification Report:')
-    print(classification_report(test_y, test_pred, target_names=activity_labels, zero_division=0))
+    print(classification_report(true_labels, pred_labels, target_names=activity_labels, zero_division=0))
     return None
 
 
@@ -285,7 +286,7 @@ if __name__ == '__main__':
 
     if args.train_model:  # perform model training
         # initialise model architecture
-        model = DeepNeuralNetwork(num_features=len(feature_cols))
+        model = DeepNeuralNetwork(input_dim=len(feature_cols))
 
         # initialise optimiser and learning parameters
         optimiser = optim.Adam(params=model.parameters(), lr=config['learning_rate'])
@@ -309,7 +310,7 @@ if __name__ == '__main__':
         plot_train_loss(epoch_train_loss)
 
     if args.eval_model:  # perform inference on test dataset and evaluate model performance
-        model = DeepNeuralNetwork(num_features=len(feature_cols))
+        model = DeepNeuralNetwork(input_dim=len(feature_cols))
         model.load_state_dict(torch.load(os.path.join(os.path.dirname(__file__),
                                                       config['activity_models_directory'] +
                                                       'model_{}.pth'.format(args.name))))
@@ -317,10 +318,10 @@ if __name__ == '__main__':
         model.to(device)
         model.eval()
 
-        train_pred = inference(train_x)
-        print('train result')
+        train_pred = inference(model, train_x)
+        print('Training Result')
         evaluate(train_y, train_pred)
 
-        test_pred = inference(test_x)
-        print('test result')
+        test_pred = inference(model, test_x)
+        print('Test Result')
         evaluate(test_y, test_pred)
