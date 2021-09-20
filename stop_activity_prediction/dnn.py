@@ -19,6 +19,7 @@ with open(os.path.join(os.path.dirname(__file__), '../config.json')) as f:
 
 # load parameters
 parser = argparse.ArgumentParser()
+parser.add_argument("--name", type=str, default='DNN')
 parser.add_argument("--train_model", type=bool, default=True)
 parser.add_argument("--eval_model", type=bool, default=True)
 parser.add_argument("--dropout", type=float, default=0.5)
@@ -302,7 +303,7 @@ if __name__ == '__main__':
         # save trained model
         torch.save(model.state_dict(),
                    os.path.join(os.path.dirname(__file__),
-                                config['activity_models_directory'] + 'model_DNN.pth'))
+                                config['activity_models_directory'] + 'model_{}.pth'.format(args.name)))
 
         # plot train loss graph
         plot_train_loss(epoch_train_loss)
@@ -310,7 +311,8 @@ if __name__ == '__main__':
     if args.eval_model:  # perform inference on test dataset and evaluate model performance
         model = DeepNeuralNetwork(num_features=len(feature_cols))
         model.load_state_dict(torch.load(os.path.join(os.path.dirname(__file__),
-                                                      config['activity_models_directory'] + 'model_DNN.pth')))
+                                                      config['activity_models_directory'] +
+                                                      'model_{}.pth'.format(args.name))))
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         model.to(device)
         model.eval()
