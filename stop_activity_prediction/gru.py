@@ -77,11 +77,8 @@ class GatedRecurrentUnit(nn.Module):
         # initialise hidden state for first input with zeros
         hidden_0 = torch.zeros(self.num_layers, x.size(0), self.hidden_dim).requires_grad_()
 
-        # initialise cell state for first input with zeros
-        cell_0 = torch.zeros(self.num_layers, x.size(0), self.hidden_dim).requires_grad_()
-
         # forward propagation by passing input, hidden state and cell state into model
-        x, (hidden_new, cell_new) = self.lstm(x, (hidden_0.detach(), cell_0.detach()))
+        x, _ = self.gru(x, hidden_0.detach())
 
         # reshape output which has shape (batch_size, seq_length, hidden size) to fit into FC layer
         x = x[:, -1, :]
