@@ -289,7 +289,7 @@ if __name__ == '__main__':
         model = DeepNeuralNetwork(input_dim=len(feature_cols))
 
         # initialise optimiser and learning parameters
-        optimiser = optim.Adam(params=model.parameters(), lr=config['learning_rate'])
+        optimiser = optim.Adam(params=model.parameters(), lr=config['dnn_learning_rate'])
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         model.to(device)
 

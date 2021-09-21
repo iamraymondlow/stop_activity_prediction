@@ -221,7 +221,7 @@ def inference(model, input_features):
     for i in tqdm(range(len(input_features) // config['batch_size'])):
         batch_features = torch.tensor(
             input_features.iloc[i*config['batch_size']: (i+1)*config['batch_size']].values
-        ).view([config['batch_size'], -1, model.input_dim]).to(device)
+        ).view([config['batch_size'], -1, model.input_dim]).float().to(device)
         outputs = model(batch_features)
 
         # get batch labels
@@ -305,7 +305,7 @@ if __name__ == '__main__':
         model = GatedRecurrentUnit(input_dim=len(feature_cols))
 
         # initialise optimiser and learning parameters
-        optimiser = optim.Adam(params=model.parameters(), lr=config['learning_rate'])
+        optimiser = optim.Adam(params=model.parameters(), lr=config['gru_learning_rate'])
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         model.to(device)
 
