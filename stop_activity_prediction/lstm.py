@@ -339,8 +339,8 @@ if __name__ == '__main__':
 
         train_pred = inference(model, train_x)
         print('Training Result')
-        evaluate(train_y[train_pred.shape[0], :], train_pred)
+        evaluate(train_y.iloc[:train_pred.shape[0]], train_pred)
 
         test_pred = inference(model, test_x)
         print('Test Result')
-        evaluate(test_y[test_pred.shape[0], :], test_pred)
+        evaluate(test_y.iloc[:test_pred.shape[0]], test_pred)
