@@ -296,7 +296,7 @@ if __name__ == '__main__':
         # train model
         epoch_train_loss = []
         for epoch in range(config['epochs']):
-            print('Epoch {}/{}'.format(epoch, config['epochs']))
+            print('Epoch {}/{}'.format(epoch+1, config['epochs']))
             epoch_loss = train(model, optimiser, train_x, train_y, device)
             epoch_train_loss.append(epoch_loss)
             print('Epoch loss: {}'.format(epoch_loss))
