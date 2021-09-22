@@ -26,6 +26,7 @@ parser.add_argument("--hidden_dim", type=int, default=128)
 parser.add_argument("--num_layers", type=int, default=5)
 parser.add_argument("--output_dim", type=int, default=1)
 parser.add_argument("--bidirectional", type=bool, default=False)
+parser.add_argument("--class_weighting", type=bool, default=True)
 args = parser.parse_args()
 
 
@@ -120,7 +121,14 @@ class GatedRecurrentUnit(nn.Module):
         loss7 = nn.BCELoss()(out7, torch.reshape(t7, (-1, 1))).float()
         loss8 = nn.BCELoss()(out8, torch.reshape(t8, (-1, 1))).float()
 
-        sum_loss = loss1 + loss2 + loss3 + loss4 + loss5 + loss6 + loss7 + loss8
+        if args.class_weighting:
+            sum_loss = loss1 * delivercargo_weight + loss2 * pickupcargo_weight + \
+                       loss3 * other_weight + loss4 * shift_weight + \
+                       loss5 * break_weight + loss6 * dropofftrailer_weight + \
+                       loss7 * pickuptrailer_weight + loss8 * maintenance_weight
+        else:
+            sum_loss = loss1 + loss2 + loss3 + loss4 + loss5 + loss6 + loss7 + loss8
+
         return sum_loss
 
 
@@ -299,6 +307,17 @@ if __name__ == '__main__':
     train_y = train_data[activity_cols]
     test_x = test_data[feature_cols]
     test_y = test_data[activity_cols]
+
+    # introduce class weights based on inverse of class frequency
+    delivercargo_weight = len(train_x) / (len(activity_cols) * train_y['MappedActivity.DeliverCargo'].sum())
+    pickupcargo_weight = len(train_x) / (len(activity_cols) * train_y['MappedActivity.PickupCargo'].sum())
+    other_weight = len(train_x) / (len(activity_cols) * train_y['MappedActivity.Other'].sum())
+    shift_weight = len(train_x) / (len(activity_cols) * train_y['MappedActivity.Shift'].sum())
+    break_weight = len(train_x) / (len(activity_cols) * train_y['MappedActivity.Break'].sum())
+    dropofftrailer_weight = len(train_x) / (
+            len(activity_cols) * train_y['MappedActivity.DropoffTrailerContainer'].sum())
+    pickuptrailer_weight = len(train_x) / (len(activity_cols) * train_y['MappedActivity.PickupTrailerContainer'].sum())
+    maintenance_weight = len(train_x) / (len(activity_cols) * train_y['MappedActivity.Maintenance'].sum())
 
     if args.train_model:  # perform model training
         # initialise model architecture
