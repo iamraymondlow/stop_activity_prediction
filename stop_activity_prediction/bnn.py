@@ -26,7 +26,7 @@ parser.add_argument("--train_model", type=bool, default=True)
 parser.add_argument("--eval_model", type=bool, default=True)
 parser.add_argument("--dropout", type=float, default=0.5)
 parser.add_argument("--output_dim", type=int, default=1)
-parser.add_argument("--class_weighting", type=bool, default=False)
+parser.add_argument("--class_weighting", type=bool, default=True)
 parser.add_argument("--num_classes", type=int, default=8)
 parser.add_argument("--sample_num", type=int, default=5)
 args = parser.parse_args()
@@ -229,20 +229,16 @@ def inference(model, input_features):
             Contains the input features to be passed into the model for inference.
 
     Returns:
-        final_labels: list
+        final_labels: np.array
             Contains the activity labels inferred by the model based on the input features.
     """
     input_features = torch.tensor(input_features.values).float().to(device)
-    print('input_feature: {}'.format(input_features.size))
-    final_outputs = np.zeros((input_features.size[0], args.num_classes))
+    final_outputs = np.zeros((input_features.size()[0], args.num_classes))
     for _ in range(args.sample_num):
         outputs = model(input_features)
-        print('outputs: {}'.format(type(outputs)))
         for i in range(len(outputs)):
-            final_outputs[:, i] += outputs[i].cpu().detach().numpy().reshape(-1, 1) / args.sample_num
+            final_outputs[:, i] += outputs[i].cpu().detach().numpy().reshape(-1) / args.sample_num
 
-    print('final_outputs shape: {}'.format(final_outputs.shape))
-    print('final_outputs: {}'.format(final_outputs))
     final_labels = np.where(final_outputs < 0.5, 0, 1)
     return final_labels
 
@@ -258,7 +254,7 @@ def evaluate(true_labels, pred_labels):
             Contains the model's predicted labels.
     """
     # generate evaluation scores
-    print('Deep Neural Network')
+    print('Bayesian Neural Network')
     activity_labels = [col.replace('MappedActivity.', '') for col in true_labels.columns]
     pred_labels = pd.DataFrame(pred_labels, columns=true_labels.columns)
     print('Classes: {}'.format(activity_labels))
@@ -330,7 +326,7 @@ if __name__ == '__main__':
             epoch_train_loss.append(epoch_loss)
             print('Epoch loss: {}'.format(epoch_loss))
 
-        # save trained model  #TODO check if model can be saved
+        # save trained model
         torch.save(model.state_dict(),
                    os.path.join(os.path.dirname(__file__),
                                 config['activity_models_directory'] + 'model_{}.pth'.format(args.name)))
@@ -340,7 +336,6 @@ if __name__ == '__main__':
 
     if args.eval_model:  # perform inference on test dataset and evaluate model performance
         model = BayesianNeuralNetwork(input_dim=len(feature_cols))
-        #TODO check if model can be loaded
         model.load_state_dict(torch.load(os.path.join(os.path.dirname(__file__),
                                                       config['activity_models_directory'] +
                                                       'model_{}.pth'.format(args.name))))
