@@ -24,6 +24,7 @@ parser.add_argument("--eval_model", type=bool, default=True)
 parser.add_argument("--dropout", type=float, default=0.5)
 parser.add_argument("--hidden_dim", type=int, default=128)
 parser.add_argument("--num_layers", type=int, default=5)
+parser.add_argument("--sequence_len", type=int, default=5)
 parser.add_argument("--output_dim", type=int, default=1)
 parser.add_argument("--bidirectional", type=bool, default=False)
 parser.add_argument("--class_weighting", type=bool, default=True)
@@ -157,11 +158,23 @@ def train(model, optimiser, train_features, train_target, device):
     """
     model.train()
     train_loss = 0.0
-    for i in tqdm(range(len(train_features) // config['batch_size'])):
-        batch_features = torch.tensor(
-            train_features.iloc[i*config['batch_size']: (i+1)*config['batch_size']].values
-        ).view([config['batch_size'], -1, model.input_dim]).to(device)
-        batch_target = train_target.iloc[i*config['batch_size']: (i+1)*config['batch_size']]
+    batch_seq_sum = config['batch_size'] + args.sequence_len
+    for i in tqdm(range(len(train_features) // batch_seq_sum)):
+        start_idx = i * batch_seq_sum
+        end_idx = (i+1) * batch_seq_sum
+        batch_features = None
+        for j in range(config['batch_size']):
+            sub_batch_features = torch.tensor(
+                train_features.iloc[(start_idx + j): (start_idx + args.sequence_len + j)].values
+            ).view(-1, args.sequence_len, model.input_dim)
+
+            if batch_features is None:
+                batch_features = sub_batch_features
+            else:
+                batch_features = torch.cat((batch_features, sub_batch_features))
+
+        batch_features = batch_features.to(device)
+        batch_target = train_target.iloc[(start_idx + args.sequence_len): end_idx]
         delivercargo_target = torch.tensor(batch_target['MappedActivity.DeliverCargo'].values).to(device)
         pickupcargo_target = torch.tensor(batch_target['MappedActivity.PickupCargo'].values).to(device)
         other_target = torch.tensor(batch_target['MappedActivity.Other'].values).to(device)
