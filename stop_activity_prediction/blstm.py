@@ -7,6 +7,8 @@ import matplotlib.pyplot as plt
 import argparse
 import pandas as pd
 import numpy as np
+from blitz.modules import BayesianLSTM
+from blitz.utils import variational_estimator
 from load_data import DataLoader
 from sklearn.metrics import accuracy_score, classification_report, hamming_loss, \
     jaccard_score, roc_auc_score, zero_one_loss
@@ -18,42 +20,47 @@ with open(os.path.join(os.path.dirname(__file__), '../config.json')) as f:
 
 # load parameters
 parser = argparse.ArgumentParser()
-parser.add_argument("--name", type=str, default='LSTM')
+parser.add_argument("--name", type=str, default='BLSTM')
 parser.add_argument("--train_model", type=bool, default=True)
 parser.add_argument("--eval_model", type=bool, default=True)
 parser.add_argument("--dropout", type=float, default=0.5)
 parser.add_argument("--hidden_dim", type=int, default=128)
-parser.add_argument("--num_layers", type=int, default=5)
+parser.add_argument("--num_layers", type=int, default=1)
 parser.add_argument("--output_dim", type=int, default=1)
-parser.add_argument("--bidirectional", type=bool, default=False)
 parser.add_argument("--class_weighting", type=bool, default=True)
+parser.add_argument("--num_classes", type=int, default=8)
+parser.add_argument("--sample_num", type=int, default=5)
 args = parser.parse_args()
 
 
-class LongShortTermMemory(nn.Module):
+@variational_estimator
+class BayesianLongShortTermMemory(nn.Module):
     """
-    Defines the architecture of a long short-term memory neural network.
+    Defines the architecture of a bayesian long short-term memory neural network.
     """
     def __init__(self, input_dim):
         """
-        Initialises the LSTM model architecture. 5 stacked LSTM layers and 8/18 binary output nodes
+        Initialises the bayesian LSTM model architecture. 5 stacked BLSTM layers and 8/18 binary output nodes
         for each activity class.
 
         Parameters:
             input_dim: int
                 Number of input features that will be passed into the model.
         """
-        super(LongShortTermMemory, self).__init__()
+        super(BayesianLongShortTermMemory, self).__init__()
         # define number of layers and nodes in each layer
         self.input_dim = input_dim
         self.hidden_dim = args.hidden_dim
         self.num_layers = args.num_layers
 
-        # LSTM layer
-        self.lstm = nn.LSTM(self.input_dim, self.hidden_dim, self.num_layers,
-                            batch_first=True, dropout=args.dropout, bidirectional=args.bidirectional)
+        # Bayesian LSTM layer
+        self.blstm1 = BayesianLSTM(self.input_dim, self.hidden_dim)
+        self.blstm2 = BayesianLSTM(self.hidden_dim, self.hidden_dim)
+        self.blstm3 = BayesianLSTM(self.hidden_dim, self.hidden_dim)
+        self.blstm4 = BayesianLSTM(self.hidden_dim, self.hidden_dim)
+        self.blstm5 = BayesianLSTM(self.hidden_dim, self.hidden_dim)
 
-        # fully connected output layer
+        # fully connected output layer for each activity class
         self.out1 = nn.Linear(self.hidden_dim, args.output_dim)
         self.out2 = nn.Linear(self.hidden_dim, args.output_dim)
         self.out3 = nn.Linear(self.hidden_dim, args.output_dim)
@@ -82,7 +89,11 @@ class LongShortTermMemory(nn.Module):
         cell_0 = torch.zeros(self.num_layers, x.size(0), self.hidden_dim).requires_grad_()
 
         # forward propagation by passing input, hidden state and cell state into model
-        x, _ = self.lstm(x, (hidden_0.detach(), cell_0.detach()))
+        x, (hidden_1, cell_1) = self.blstm1(x, (hidden_0.detach(), cell_0.detach()))
+        x, (hidden_2, cell_2) = self.blstm2(x, (hidden_1, cell_1))
+        x, (hidden_3, cell_3) = self.blstm3(x, (hidden_2, cell_2))
+        x, (hidden_4, cell_4) = self.blstm4(x, (hidden_3, cell_3))
+        x, _ = self.blstm5(x, (hidden_4, cell_4))
 
         # reshape output which has shape (batch_size, seq_length, hidden size) to fit into FC layer
         x = x[:, -1, :]
@@ -175,12 +186,15 @@ def train(model, optimiser, train_features, train_target, device):
         optimiser.zero_grad()
 
         # perform inference and compute loss
-        output = model(batch_features.float())
         target = (delivercargo_target.float(), pickupcargo_target.float(), other_target.float(),
                   shift_target.float(), break_target.float(), dropofftrailer_target.float(),
                   pickuptrailer_target.float(), maintenance_target.float())
-        loss = model.calculate_loss(output, target)
-        train_loss += loss.item()
+
+        # calculate loss based on average of each sample
+        for _ in range(args.sample_num):
+            output = model(batch_features.float())
+            loss = model.calculate_loss(output, target)
+            train_loss += loss.item() / args.sample_num
 
         # perform backpropagation
         loss.backward()
@@ -219,38 +233,34 @@ def inference(model, input_features):
     Performs inference on the input features.
 
     Parameters:
-        model: LongShortTermMemory object
-            Contains the model architecture of the LSTM model.
+        model: BayesianLongShortTermMemory object
+            Contains the model architecture of the Bayesian LSTM model.
         input_features:
             Contains the input features to be passed into the model for inference.
 
     Returns:
-        all_labels: list
+        final_labels: np.array
             Contains the activity labels inferred by the model based on the input features.
     """
-    all_labels = None
+    final_outputs = None
     for i in tqdm(range(len(input_features) // config['batch_size'])):
         batch_features = torch.tensor(
             input_features.iloc[i*config['batch_size']: (i+1)*config['batch_size']].values
         ).view([config['batch_size'], -1, model.input_dim]).float().to(device)
-        outputs = model(batch_features)
 
-        # get batch labels
-        batch_labels = None
-        for out in outputs:
-            out = out.cpu().detach().numpy()
-            if batch_labels is None:
-                batch_labels = np.where(out < 0.5, 0, 1)
-            else:
-                batch_labels = np.hstack((batch_labels, np.where(out < 0.5, 0, 1)))
+        batch_outputs = np.zeros((batch_features.size()[0], args.num_classes))
+        for _ in range(args.sample_num):
+            outputs = model(batch_features)
+            for j in range(len(outputs)):
+                batch_outputs[:, j] += outputs[j].cpu().detach().numpy().reshape(-1) / args.sample_num
 
-        # concat batch results
-        if all_labels is None:
-            all_labels = batch_labels
+        if final_outputs is None:
+            final_outputs = batch_outputs
         else:
-            all_labels = np.vstack((all_labels, batch_labels))
+            final_outputs = np.vstack((final_outputs, batch_outputs))
 
-    return all_labels
+    final_labels = np.where(final_outputs < 0.5, 0, 1)
+    return final_labels
 
 
 def evaluate(true_labels, pred_labels):
@@ -264,10 +274,7 @@ def evaluate(true_labels, pred_labels):
             Contains the model's predicted labels.
     """
     # generate evaluation scores
-    if args.bidirectional:
-        print('Bidirectional Long Short-Term Memory')
-    else:
-        print('Long Short-Term Memory')
+    print('Bayesian Long Short-Term Memory')
     activity_labels = [col.replace('MappedActivity.', '') for col in true_labels.columns]
     pred_labels = pd.DataFrame(pred_labels, columns=true_labels.columns)
     print('Classes: {}'.format(activity_labels))
@@ -324,7 +331,7 @@ if __name__ == '__main__':
 
     if args.train_model:  # perform model training
         # initialise model architecture
-        model = LongShortTermMemory(input_dim=len(feature_cols))
+        model = BayesianLongShortTermMemory(input_dim=len(feature_cols))
 
         # initialise optimiser and learning parameters
         optimiser = optim.Adam(params=model.parameters(), lr=config['lstm_learning_rate'])
@@ -348,7 +355,7 @@ if __name__ == '__main__':
         plot_train_loss(epoch_train_loss)
 
     if args.eval_model:  # perform inference on test dataset and evaluate model performance
-        model = LongShortTermMemory(input_dim=len(feature_cols))
+        model = BayesianLongShortTermMemory(input_dim=len(feature_cols))
         model.load_state_dict(torch.load(os.path.join(os.path.dirname(__file__),
                                                       config['activity_models_directory'] +
                                                       'model_{}.pth'.format(args.name))))
