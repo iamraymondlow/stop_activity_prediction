@@ -26,6 +26,7 @@ parser.add_argument("--train_model", type=bool, default=True)
 parser.add_argument("--eval_model", type=bool, default=True)
 parser.add_argument("--dropout", type=float, default=0.5)
 parser.add_argument("--output_dim", type=int, default=1)
+parser.add_argument("--label_weighting", type=bool, default=True)
 parser.add_argument("--class_weighting", type=bool, default=True)
 parser.add_argument("--num_classes", type=int, default=8)
 parser.add_argument("--sample_num", type=int, default=5)
@@ -100,6 +101,25 @@ class BayesianNeuralNetwork(nn.Module):
         return out1.float(), out2.float(), out3.float(), out4.float(), out5.float(), \
                out6.float(), out7.float(), out8.float()
 
+    def calculate_weight(self, pos_weight, neg_weight, mask_tensor):
+        """
+        Calculates the weights for BCELoss based on the positive and negative label weights.
+
+        Parameters:
+            pos_weight: float
+                Weight applied to each positive class instance.
+            neg_weight: float
+                Weight applied to each negative class instance.
+            mask_tensor: torch.tensor
+                Contains an indicator tensor indicating if a particular activity is conducted or not in each batch.
+        Returns:
+            weight_tensor: torch.tensor
+                Contains a tensor indicating the weight applied to each instance in each batch.
+        """
+        weight_tensor = pos_weight * mask_tensor + neg_weight * torch.abs((mask_tensor - 1.0))
+        weight_tensor = torch.reshape(weight_tensor, (-1, 1))
+        return weight_tensor
+
     def calculate_loss(self, output, target):
         """
         Calculates the loss value for each activity class and sums them up.
@@ -115,14 +135,33 @@ class BayesianNeuralNetwork(nn.Module):
         """
         out1, out2, out3, out4, out5, out6, out7, out8 = output
         t1, t2, t3, t4, t5, t6, t7, t8 = target
-        loss1 = nn.BCELoss()(out1, torch.reshape(t1, (-1, 1))).float()
-        loss2 = nn.BCELoss()(out2, torch.reshape(t2, (-1, 1))).float()
-        loss3 = nn.BCELoss()(out3, torch.reshape(t3, (-1, 1))).float()
-        loss4 = nn.BCELoss()(out4, torch.reshape(t4, (-1, 1))).float()
-        loss5 = nn.BCELoss()(out5, torch.reshape(t5, (-1, 1))).float()
-        loss6 = nn.BCELoss()(out6, torch.reshape(t6, (-1, 1))).float()
-        loss7 = nn.BCELoss()(out7, torch.reshape(t7, (-1, 1))).float()
-        loss8 = nn.BCELoss()(out8, torch.reshape(t8, (-1, 1))).float()
+
+        if args.label_weighting:
+            loss1 = nn.BCELoss(weight=self.calculate_weight(delivercargo_pos_weight, delivercargo_neg_weight, t1))\
+                (out1, torch.reshape(t1, (-1, 1))).float()
+            loss2 = nn.BCELoss(weight=self.calculate_weight(pickupcargo_pos_weight, pickupcargo_neg_weight, t2))\
+                (out2, torch.reshape(t2, (-1, 1))).float()
+            loss3 = nn.BCELoss(weight=self.calculate_weight(other_pos_weight, other_neg_weight, t3))\
+                (out3, torch.reshape(t3, (-1, 1))).float()
+            loss4 = nn.BCELoss(weight=self.calculate_weight(shift_pos_weight, shift_neg_weight, t4))\
+                (out4, torch.reshape(t4, (-1, 1))).float()
+            loss5 = nn.BCELoss(weight=self.calculate_weight(break_pos_weight, break_neg_weight, t5))\
+                (out5, torch.reshape(t5, (-1, 1))).float()
+            loss6 = nn.BCELoss(weight=self.calculate_weight(dropofftrailer_pos_weight, dropofftrailer_neg_weight, t6))\
+                (out6, torch.reshape(t6, (-1, 1))).float()
+            loss7 = nn.BCELoss(weight=self.calculate_weight(pickuptrailer_pos_weight, pickuptrailer_neg_weight, t7))\
+                (out7, torch.reshape(t7, (-1, 1))).float()
+            loss8 = nn.BCELoss(weight=self.calculate_weight(maintenance_pos_weight, maintenance_neg_weight, t8))\
+                (out8, torch.reshape(t8, (-1, 1))).float()
+        else:
+            loss1 = nn.BCELoss()(out1, torch.reshape(t1, (-1, 1))).float()
+            loss2 = nn.BCELoss()(out2, torch.reshape(t2, (-1, 1))).float()
+            loss3 = nn.BCELoss()(out3, torch.reshape(t3, (-1, 1))).float()
+            loss4 = nn.BCELoss()(out4, torch.reshape(t4, (-1, 1))).float()
+            loss5 = nn.BCELoss()(out5, torch.reshape(t5, (-1, 1))).float()
+            loss6 = nn.BCELoss()(out6, torch.reshape(t6, (-1, 1))).float()
+            loss7 = nn.BCELoss()(out7, torch.reshape(t7, (-1, 1))).float()
+            loss8 = nn.BCELoss()(out8, torch.reshape(t8, (-1, 1))).float()
 
         if args.class_weighting:
             fit_loss = loss1 * delivercargo_weight + loss2 * pickupcargo_weight + \
@@ -270,6 +309,43 @@ def evaluate(true_labels, pred_labels):
     return None
 
 
+def calculate_class_weight(total_stops, num_classes, num_activity):
+    """
+    Calculates the activity class weights, which is an inverse of the number of times the activity was conducted.
+
+    Parameters:
+        total_stops: int
+            Contains the number of stops made in the training set.
+        num_classes: int
+            Contains the number of activity classes.
+        num_activity: int
+            Contains the number of times the activity was conducted.
+    Returns:
+        class_weight: float
+    """
+    class_weight = total_stops / (num_classes * num_activity)
+    return class_weight
+
+
+def calculate_label_weights(total_stops, num_activity):
+    """
+    Calculates the positive and negative weights, which is an inverse of the number of times the activity was conducted.
+
+    Parameters:
+        total_stops: int
+            Contains the number of stops made in the training set.
+        num_activity: int
+            Contains the number of times the activity was conducted.
+    Returns:
+        pos_weight: float
+        neg_weight: float
+    """
+    pos_weight = total_stops / num_activity
+    neg_weight = total_stops / (total_stops - num_activity)
+
+    return pos_weight, neg_weight
+
+
 if __name__ == '__main__':
     # load training and test datasets
     loader = DataLoader()
@@ -299,15 +375,40 @@ if __name__ == '__main__':
     test_y = test_data[activity_cols]
 
     # introduce class weights based on inverse of class frequency
-    delivercargo_weight = len(train_x) / (len(activity_cols) * train_y['MappedActivity.DeliverCargo'].sum())
-    pickupcargo_weight = len(train_x) / (len(activity_cols) * train_y['MappedActivity.PickupCargo'].sum())
-    other_weight = len(train_x) / (len(activity_cols) * train_y['MappedActivity.Other'].sum())
-    shift_weight = len(train_x) / (len(activity_cols) * train_y['MappedActivity.Shift'].sum())
-    break_weight = len(train_x) / (len(activity_cols) * train_y['MappedActivity.Break'].sum())
-    dropofftrailer_weight = len(train_x) / (
-            len(activity_cols) * train_y['MappedActivity.DropoffTrailerContainer'].sum())
-    pickuptrailer_weight = len(train_x) / (len(activity_cols) * train_y['MappedActivity.PickupTrailerContainer'].sum())
-    maintenance_weight = len(train_x) / (len(activity_cols) * train_y['MappedActivity.Maintenance'].sum())
+    delivercargo_weight = calculate_class_weight(len(train_x), len(activity_cols),
+                                                 train_y['MappedActivity.DeliverCargo'].sum())
+    pickupcargo_weight = calculate_class_weight(len(train_x), len(activity_cols),
+                                                train_y['MappedActivity.PickupCargo'].sum())
+    other_weight = calculate_class_weight(len(train_x), len(activity_cols),
+                                          train_y['MappedActivity.Other'].sum())
+    shift_weight = calculate_class_weight(len(train_x), len(activity_cols),
+                                          train_y['MappedActivity.Shift'].sum())
+    break_weight = calculate_class_weight(len(train_x), len(activity_cols),
+                                          train_y['MappedActivity.Break'].sum())
+    dropofftrailer_weight = calculate_class_weight(len(train_x), len(activity_cols),
+                                                   train_y['MappedActivity.DropoffTrailerContainer'].sum())
+    pickuptrailer_weight = calculate_class_weight(len(train_x), len(activity_cols),
+                                                  train_y['MappedActivity.PickupTrailerContainer'].sum())
+    maintenance_weight = calculate_class_weight(len(train_x), len(activity_cols),
+                                                train_y['MappedActivity.Maintenance'].sum())
+
+    # introduce label weights based on inverse of label frequency
+    delivercargo_pos_weight, delivercargo_neg_weight = calculate_label_weights(
+        len(train_x), train_y['MappedActivity.DeliverCargo'].sum())
+    pickupcargo_pos_weight, pickupcargo_neg_weight = calculate_label_weights(
+        len(train_x), train_y['MappedActivity.PickupCargo'].sum())
+    other_pos_weight, other_neg_weight = calculate_label_weights(
+        len(train_x), train_y['MappedActivity.Other'].sum())
+    shift_pos_weight, shift_neg_weight = calculate_label_weights(
+        len(train_x), train_y['MappedActivity.Shift'].sum())
+    break_pos_weight, break_neg_weight = calculate_label_weights(
+        len(train_x), train_y['MappedActivity.Break'].sum())
+    dropofftrailer_pos_weight, dropofftrailer_neg_weight = calculate_label_weights(
+        len(train_x), train_y['MappedActivity.DropoffTrailerContainer'].sum())
+    pickuptrailer_pos_weight, pickuptrailer_neg_weight = calculate_label_weights(
+        len(train_x), train_y['MappedActivity.PickupTrailerContainer'].sum())
+    maintenance_pos_weight, maintenance_neg_weight = calculate_label_weights(
+        len(train_x), train_y['MappedActivity.Maintenance'].sum())
 
     if args.train_model:  # perform model training
         # initialise model architecture
