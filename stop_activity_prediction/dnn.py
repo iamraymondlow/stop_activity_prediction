@@ -24,8 +24,8 @@ parser.add_argument("--train_model", type=bool, default=True)
 parser.add_argument("--eval_model", type=bool, default=True)
 parser.add_argument("--dropout", type=float, default=0.5)
 parser.add_argument("--output_dim", type=int, default=1)
-parser.add_argument("--label_weighting", type=bool, default=True)
-parser.add_argument("--class_weighting", type=bool, default=True)
+parser.add_argument("--class_weighting", type=bool, default=False)
+parser.add_argument("--label_weighting", type=bool, default=False)
 args = parser.parse_args()
 
 
@@ -295,6 +295,7 @@ def evaluate(true_labels, pred_labels):
     print('Hamming Loss: {}'.format(hamming_loss(true_labels, pred_labels)))
     print('Jaccard Score')
     print(jaccard_score(true_labels, pred_labels, average=None))
+    print(jaccard_score(true_labels, pred_labels, average='macro'))
     print('ROC AUC Score')
     print(roc_auc_score(true_labels, pred_labels))
     print('Zero One Loss: {}'.format(zero_one_loss(true_labels, pred_labels)))

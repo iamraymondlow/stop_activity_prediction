@@ -26,9 +26,9 @@ parser.add_argument("--hidden_dim", type=int, default=128)
 parser.add_argument("--num_layers", type=int, default=5)
 parser.add_argument("--sequence_len", type=int, default=5)
 parser.add_argument("--output_dim", type=int, default=1)
-parser.add_argument("--bidirectional", type=bool, default=False)
-parser.add_argument("--label_weighting", type=bool, default=True)
+parser.add_argument("--bidirectional", type=bool, default=True)
 parser.add_argument("--class_weighting", type=bool, default=True)
+parser.add_argument("--label_weighting", type=bool, default=True)
 args = parser.parse_args()
 
 
@@ -56,14 +56,24 @@ class GatedRecurrentUnit(nn.Module):
                           batch_first=True, dropout=args.dropout, bidirectional=args.bidirectional)
 
         # fully connected output layer
-        self.out1 = nn.Linear(self.hidden_dim, args.output_dim)
-        self.out2 = nn.Linear(self.hidden_dim, args.output_dim)
-        self.out3 = nn.Linear(self.hidden_dim, args.output_dim)
-        self.out4 = nn.Linear(self.hidden_dim, args.output_dim)
-        self.out5 = nn.Linear(self.hidden_dim, args.output_dim)
-        self.out6 = nn.Linear(self.hidden_dim, args.output_dim)
-        self.out7 = nn.Linear(self.hidden_dim, args.output_dim)
-        self.out8 = nn.Linear(self.hidden_dim, args.output_dim)
+        if args.bidirectional:
+            self.out1 = nn.Linear(self.hidden_dim * 2, args.output_dim)
+            self.out2 = nn.Linear(self.hidden_dim * 2, args.output_dim)
+            self.out3 = nn.Linear(self.hidden_dim * 2, args.output_dim)
+            self.out4 = nn.Linear(self.hidden_dim * 2, args.output_dim)
+            self.out5 = nn.Linear(self.hidden_dim * 2, args.output_dim)
+            self.out6 = nn.Linear(self.hidden_dim * 2, args.output_dim)
+            self.out7 = nn.Linear(self.hidden_dim * 2, args.output_dim)
+            self.out8 = nn.Linear(self.hidden_dim * 2, args.output_dim)
+        else:
+            self.out1 = nn.Linear(self.hidden_dim, args.output_dim)
+            self.out2 = nn.Linear(self.hidden_dim, args.output_dim)
+            self.out3 = nn.Linear(self.hidden_dim, args.output_dim)
+            self.out4 = nn.Linear(self.hidden_dim, args.output_dim)
+            self.out5 = nn.Linear(self.hidden_dim, args.output_dim)
+            self.out6 = nn.Linear(self.hidden_dim, args.output_dim)
+            self.out7 = nn.Linear(self.hidden_dim, args.output_dim)
+            self.out8 = nn.Linear(self.hidden_dim, args.output_dim)
 
     def forward(self, x):
         """
@@ -78,7 +88,10 @@ class GatedRecurrentUnit(nn.Module):
                 Model output for each activity class.
         """
         # initialise hidden state for first input with zeros
-        hidden_0 = torch.zeros(self.num_layers, x.size(0), self.hidden_dim).requires_grad_()
+        if args.bidirectional:
+            hidden_0 = torch.zeros(self.num_layers * 2, x.size(0), self.hidden_dim).requires_grad_()
+        else:
+            hidden_0 = torch.zeros(self.num_layers, x.size(0), self.hidden_dim).requires_grad_()
 
         # forward propagation by passing input, hidden state and cell state into model
         x, _ = self.gru(x, hidden_0.detach())
@@ -324,6 +337,7 @@ def evaluate(true_labels, pred_labels):
     print('Hamming Loss: {}'.format(hamming_loss(true_labels, pred_labels)))
     print('Jaccard Score')
     print(jaccard_score(true_labels, pred_labels, average=None))
+    print(jaccard_score(true_labels, pred_labels, average='macro'))
     print('ROC AUC Score')
     print(roc_auc_score(true_labels, pred_labels))
     print('Zero One Loss: {}'.format(zero_one_loss(true_labels, pred_labels)))

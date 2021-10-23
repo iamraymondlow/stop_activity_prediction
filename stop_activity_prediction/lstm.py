@@ -56,14 +56,24 @@ class LongShortTermMemory(nn.Module):
                             batch_first=True, dropout=args.dropout, bidirectional=args.bidirectional)
 
         # fully connected output layer
-        self.out1 = nn.Linear(self.hidden_dim, args.output_dim)
-        self.out2 = nn.Linear(self.hidden_dim, args.output_dim)
-        self.out3 = nn.Linear(self.hidden_dim, args.output_dim)
-        self.out4 = nn.Linear(self.hidden_dim, args.output_dim)
-        self.out5 = nn.Linear(self.hidden_dim, args.output_dim)
-        self.out6 = nn.Linear(self.hidden_dim, args.output_dim)
-        self.out7 = nn.Linear(self.hidden_dim, args.output_dim)
-        self.out8 = nn.Linear(self.hidden_dim, args.output_dim)
+        if args.bidirectional:
+            self.out1 = nn.Linear(self.hidden_dim * 2, args.output_dim)
+            self.out2 = nn.Linear(self.hidden_dim * 2, args.output_dim)
+            self.out3 = nn.Linear(self.hidden_dim * 2, args.output_dim)
+            self.out4 = nn.Linear(self.hidden_dim * 2, args.output_dim)
+            self.out5 = nn.Linear(self.hidden_dim * 2, args.output_dim)
+            self.out6 = nn.Linear(self.hidden_dim * 2, args.output_dim)
+            self.out7 = nn.Linear(self.hidden_dim * 2, args.output_dim)
+            self.out8 = nn.Linear(self.hidden_dim * 2, args.output_dim)
+        else:
+            self.out1 = nn.Linear(self.hidden_dim, args.output_dim)
+            self.out2 = nn.Linear(self.hidden_dim, args.output_dim)
+            self.out3 = nn.Linear(self.hidden_dim, args.output_dim)
+            self.out4 = nn.Linear(self.hidden_dim, args.output_dim)
+            self.out5 = nn.Linear(self.hidden_dim, args.output_dim)
+            self.out6 = nn.Linear(self.hidden_dim, args.output_dim)
+            self.out7 = nn.Linear(self.hidden_dim, args.output_dim)
+            self.out8 = nn.Linear(self.hidden_dim, args.output_dim)
 
     def forward(self, x):
         """
@@ -77,11 +87,13 @@ class LongShortTermMemory(nn.Module):
             out1, out2, out3, out4, out5, out6, out7, out8: torch.tensor
                 Model output for each activity class.
         """
-        # initialise hidden state for first input with zeros
-        hidden_0 = torch.zeros(self.num_layers, x.size(0), self.hidden_dim).requires_grad_()
-
-        # initialise cell state for first input with zeros
-        cell_0 = torch.zeros(self.num_layers, x.size(0), self.hidden_dim).requires_grad_()
+        # initialise hidden state and cell state for first input with zeros
+        if args.bidirectional:
+            hidden_0 = torch.zeros(self.num_layers * 2, x.size(0), self.hidden_dim).requires_grad_()
+            cell_0 = torch.zeros(self.num_layers * 2, x.size(0), self.hidden_dim).requires_grad_()
+        else:
+            hidden_0 = torch.zeros(self.num_layers, x.size(0), self.hidden_dim).requires_grad_()
+            cell_0 = torch.zeros(self.num_layers, x.size(0), self.hidden_dim).requires_grad_()
 
         # forward propagation by passing input, hidden state and cell state into model
         x, _ = self.lstm(x, (hidden_0.detach(), cell_0.detach()))
@@ -327,6 +339,7 @@ def evaluate(true_labels, pred_labels):
     print('Hamming Loss: {}'.format(hamming_loss(true_labels, pred_labels)))
     print('Jaccard Score')
     print(jaccard_score(true_labels, pred_labels, average=None))
+    print(jaccard_score(true_labels, pred_labels, average='macro'))
     print('ROC AUC Score')
     print(roc_auc_score(true_labels, pred_labels))
     print('Zero One Loss: {}'.format(zero_one_loss(true_labels, pred_labels)))
