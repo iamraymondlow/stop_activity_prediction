@@ -24,8 +24,8 @@ parser.add_argument("--train_model", type=bool, default=True)
 parser.add_argument("--eval_model", type=bool, default=True)
 parser.add_argument("--dropout", type=float, default=0.5)
 parser.add_argument("--output_dim", type=int, default=1)
-parser.add_argument("--class_weighting", type=bool, default=False)
-parser.add_argument("--label_weighting", type=bool, default=False)
+parser.add_argument("--class_weighting", type=bool, default=True)
+parser.add_argument("--label_weighting", type=bool, default=True)
 args = parser.parse_args()
 
 
