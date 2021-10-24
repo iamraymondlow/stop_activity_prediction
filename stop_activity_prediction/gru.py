@@ -303,7 +303,7 @@ def inference(model, input_features, raw_output=False):
     """
     all_labels = None
     raw_all_labels = []
-    for i in tqdm(range(len(input_features) // config['batch_size'])):
+    for i in range(len(input_features) // config['batch_size']):
         batch_features = torch.tensor(
             input_features.iloc[i*config['batch_size']: (i+1)*config['batch_size']].values
         ).view([config['batch_size'], -1, model.input_dim]).float().to(device)
