@@ -627,9 +627,15 @@ if __name__ == '__main__':
 
     if args.eval_model:  # perform inference on test dataset and evaluate model performance
         model = LongShortTermMemory(input_dim=len(feature_cols))
-        model.load_state_dict(torch.load(os.path.join(os.path.dirname(__file__),
-                                                      config['activity_models_directory'] +
-                                                      'model_{}.pth'.format(args.name))))
+        if args.bidirectional:
+            model.load_state_dict(torch.load(os.path.join(os.path.dirname(__file__),
+                                                          config['activity_models_directory'] +
+                                                          'model_Bi{}.pth'.format(args.name))))
+        else:
+            model.load_state_dict(torch.load(os.path.join(os.path.dirname(__file__),
+                                                          config['activity_models_directory'] +
+                                                          'model_{}.pth'.format(args.name))))
+
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         model.to(device)
         model.eval()
