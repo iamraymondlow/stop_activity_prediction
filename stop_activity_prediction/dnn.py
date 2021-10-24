@@ -12,6 +12,9 @@ from load_data import DataLoader
 from sklearn.metrics import accuracy_score, classification_report, hamming_loss, \
     jaccard_score, roc_auc_score, zero_one_loss
 from tqdm import tqdm
+from random import seed
+from random import random
+
 
 # load config file
 with open(os.path.join(os.path.dirname(__file__), '../config.json')) as f:
@@ -26,8 +29,10 @@ parser.add_argument("--dropout", type=float, default=0.5)
 parser.add_argument("--output_dim", type=int, default=1)
 parser.add_argument("--class_weighting", type=bool, default=True)
 parser.add_argument("--label_weighting", type=bool, default=True)
+parser.add_argument("--adaptive_sampling", type=bool, default=True)
+parser.add_argument("--seed", type=int, default=1)
 args = parser.parse_args()
-
+seed(args.seed)
 
 class DeepNeuralNetwork(nn.Module):
     """
@@ -247,7 +252,7 @@ def plot_train_loss(train_loss):
     plt.show()
 
 
-def inference(model, input_features):
+def inference(model, input_features, raw_output=False):
     """
     Performs inference on the input features.
 
@@ -255,14 +260,19 @@ def inference(model, input_features):
         model: DeepNeuralNetwork object
             Contains the model architecture of the DNN model.
         input_features:
-            Contains the input features to be pased into the model for inference.
+            Contains the input features to be passed into the model for inference.
+        raw_output: bool
+            Indicates if the output should be the raw probability values or binary values.
 
     Returns:
-        all_labels: list
+        all_labels: numpy.array
             Contains the activity labels inferred by the model based on the input features.
     """
     input_features = torch.tensor(input_features.values).float().to(device)
     outputs = model(input_features)
+
+    if raw_output:
+        return outputs
 
     # get all the labels
     all_labels = None
@@ -276,7 +286,7 @@ def inference(model, input_features):
     return all_labels
 
 
-def evaluate(true_labels, pred_labels):
+def print_evaluation_results(true_labels, pred_labels):
     """
     Evaluates the performance of the trained model based on different multi-label classification metrics.
 
@@ -341,13 +351,98 @@ def calculate_label_weights(total_stops, num_activity):
     return pos_weight, neg_weight
 
 
+def calculate_trip_loss(model, train_data, feature_cols, epoch_num):
+    """
+    Calculates the normalised loss for each trip based on the existing model and rank them based on their loss.
+
+    Parameters:
+        model: pytorch model
+            Contains the interim model.
+        train_data: pandas.DataFrame
+            Contains the complete training data.
+        feature_cols: list
+            Contains the list of input features.
+        epoch_num: int:
+            Contains the epoch number.
+
+    Returns:
+        log: pandas.DataFrame
+            Contains the loss value for each trip
+    """
+    log = []
+    for trip_id in train_data["TripID"].unique():
+        trip_data = train_data[train_data["TripID"] == trip_id].reset_index(drop=True)
+        trip_x = trip_data[feature_cols]
+        trip_pred = inference(model, trip_x, raw_output=True)
+
+        delivercargo_target = torch.tensor(trip_data['MappedActivity.DeliverCargo'].values).to(device)
+        pickupcargo_target = torch.tensor(trip_data['MappedActivity.PickupCargo'].values).to(device)
+        other_target = torch.tensor(trip_data['MappedActivity.Other'].values).to(device)
+        shift_target = torch.tensor(trip_data['MappedActivity.Shift'].values).to(device)
+        break_target = torch.tensor(trip_data['MappedActivity.Break'].values).to(device)
+        dropofftrailer_target = torch.tensor(trip_data['MappedActivity.DropoffTrailerContainer'].values).to(device)
+        pickuptrailer_target = torch.tensor(trip_data['MappedActivity.PickupTrailerContainer'].values).to(device)
+        maintenance_target = torch.tensor(trip_data['MappedActivity.Maintenance'].values).to(device)
+        target = (delivercargo_target.float(), pickupcargo_target.float(), other_target.float(),
+                  shift_target.float(), break_target.float(), dropofftrailer_target.float(),
+                  pickuptrailer_target.float(), maintenance_target.float())
+
+        trip_loss = model.calculate_loss(trip_pred, target).item() / len(trip_data)  # normalise trip loss based on stop number
+        log.append({"trip_id": trip_id, "epoch_{}_trip_loss".format(epoch_num): trip_loss})
+
+    log = pd.DataFrame(log)
+    log.sort_values(by="epoch_{}_trip_loss".format(epoch_num), ascending=True, ignore_index=True, inplace=True)
+    log["epoch_{}_rank".format(epoch_num)] = [i+1 for i in range(len(log))]
+    return log
+
+
+def assign_resample_prob(trip_rank, max_rank):
+    """
+    Assign the resampling probability for each trip based on its rank.
+
+    Parameters:
+        trip_rank: int
+            Contains rank of the trip.
+        max_rank: int
+            Contains the rank of the worst trip.
+
+    Returns:
+        resample_prob: float
+            Contains the resampling probability of a trip.
+    """
+    resample_prob = 0.1 + (trip_rank - 1) * (0.9 / (max_rank - 1))
+    return resample_prob
+
+
+def resample_trips(log, epoch_num):
+    """
+    Resamples trips for the next training iteration based on their resampling probabilities.
+
+    Parameters:
+        log: pandas.DataFrame
+            Contains the resampling probabilities for each trip.
+        epoch_num: int:
+            Contains the epoch number.
+
+    Returns:
+        resampled_trips: list
+            Contains the trips that has been resampled for the next training iteration.
+        log: pandas.DataFrame
+            Contains an additional column about whether a trip is being resampled.
+    """
+    log["epoch_{}_sampled".format(epoch_num)] = \
+        log["epoch_{}_resample_prob".format(epoch_num)].apply(lambda x: 1 if x >= random() else 0)
+    resampled_trips = log[log["epoch_{}_sampled".format(epoch_num)] == 1]["trip_id"].tolist()
+    return resampled_trips, log
+
+
 if __name__ == '__main__':
     # load training and test datasets
     loader = DataLoader()
     train_data, test_data = loader.train_test_split(test_ratio=0.25)
 
     # define features of interest
-    features = ['DriverID', 'Duration', 'StartHour', 'DayOfWeek.', 'PlaceType.', 'Commodity.',
+    features = ['Duration', 'StartHour', 'DayOfWeek.', 'PlaceType.', 'Commodity.',
                 'SpecialCargo.', 'Company.Type.', 'Industry.', 'VehicleType.', 'NumPOIs', 'POI.',
                 'LandUse.', 'Other.MappedActivity.', 'Past.MappedActivity.']
     feature_cols = [col for col in train_data.columns
@@ -416,11 +511,38 @@ if __name__ == '__main__':
 
         # train model
         epoch_train_loss = []
+        adaptive_sampling_log = None
         for epoch in range(config['epochs']):
             print('Epoch {}/{}'.format(epoch+1, config['epochs']))
             epoch_loss = train(model, optimiser, train_x, train_y, device)
             epoch_train_loss.append(epoch_loss)
             print('Epoch loss: {}'.format(epoch_loss))
+
+            if args.adaptive_sampling:
+                # calculate loss score for each trip and perform ranking
+                log = calculate_trip_loss(model, train_data, feature_cols, epoch+1)
+
+                # assign resampling probability based on rank
+                log["epoch_{}_resample_prob".format(epoch+1)] = log["epoch_{}_rank".format(epoch+1)]\
+                    .apply(assign_resample_prob, max_rank=len(log))
+
+                # perform resampling
+                resampled_trips, log = resample_trips(log, epoch+1)
+                sampled_train_data = train_data[train_data["TripID"].isin(resampled_trips)].reset_index(drop=True)
+                train_x = sampled_train_data[feature_cols]
+                train_y = sampled_train_data[activity_cols]
+
+                # save resampling log
+                if adaptive_sampling_log is None:
+                    adaptive_sampling_log = log
+                else:
+                    adaptive_sampling_log = adaptive_sampling_log.merge(log, on="trip_id", how="left")
+
+                # save adaptive sampling log
+                if not os.path.exists(config["log_directory"]):
+                    os.makedirs(config["log_directory"])
+                adaptive_sampling_log.to_excel(config["log_directory"] + "log_{}.xlsx".format(args.name),
+                                               index=False)
 
         # save trained model
         torch.save(model.state_dict(),
@@ -441,8 +563,8 @@ if __name__ == '__main__':
 
         train_pred = inference(model, train_x)
         print('Training Result')
-        evaluate(train_y, train_pred)
+        print_evaluation_results(train_y, train_pred)
 
         test_pred = inference(model, test_x)
         print('Test Result')
-        evaluate(test_y, test_pred)
+        print_evaluation_results(test_y, test_pred)
