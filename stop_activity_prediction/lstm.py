@@ -11,6 +11,8 @@ from load_data import DataLoader
 from sklearn.metrics import accuracy_score, classification_report, hamming_loss, \
     jaccard_score, roc_auc_score, zero_one_loss
 from tqdm import tqdm
+from random import seed, random
+
 
 # load config file
 with open(os.path.join(os.path.dirname(__file__), '../config.json')) as f:
@@ -29,7 +31,10 @@ parser.add_argument("--output_dim", type=int, default=1)
 parser.add_argument("--bidirectional", type=bool, default=True)
 parser.add_argument("--class_weighting", type=bool, default=True)
 parser.add_argument("--label_weighting", type=bool, default=True)
+parser.add_argument("--adaptive_sampling", type=bool, default=True)
+parser.add_argument("--seed", type=int, default=1)
 args = parser.parse_args()
+seed(args.seed)
 
 
 class LongShortTermMemory(nn.Module):
@@ -273,12 +278,16 @@ def plot_train_loss(train_loss):
     if not os.path.exists(os.path.join(os.path.dirname(__file__), config['figures_directory'])):
         os.makedirs(os.path.join(os.path.dirname(__file__), config['figures_directory']))
 
-    plt.savefig(os.path.join(os.path.dirname(__file__),
-                             config['figures_directory'] + 'train_loss_{}.png'.format(args.name)))
+    if args.bidirectional:
+        plt.savefig(os.path.join(os.path.dirname(__file__),
+                                 config['figures_directory'] + 'train_loss_Bi{}.png'.format(args.name)))
+    else:
+        plt.savefig(os.path.join(os.path.dirname(__file__),
+                                 config['figures_directory'] + 'train_loss_{}.png'.format(args.name)))
     plt.show()
 
 
-def inference(model, input_features):
+def inference(model, input_features, raw_output=False):
     """
     Performs inference on the input features.
 
@@ -287,37 +296,52 @@ def inference(model, input_features):
             Contains the model architecture of the LSTM model.
         input_features:
             Contains the input features to be passed into the model for inference.
+        raw_output: bool
+            Indicates if the output should be the raw probability values or binary values.
 
     Returns:
         all_labels: list
             Contains the activity labels inferred by the model based on the input features.
     """
     all_labels = None
-    for i in tqdm(range(len(input_features) // config['batch_size'])):
+    raw_all_labels = []
+    for i in range(len(input_features) // config['batch_size']):
         batch_features = torch.tensor(
             input_features.iloc[i*config['batch_size']: (i+1)*config['batch_size']].values
         ).view([config['batch_size'], -1, model.input_dim]).float().to(device)
         outputs = model(batch_features)
 
-        # get batch labels
-        batch_labels = None
-        for out in outputs:
-            out = out.cpu().detach().numpy()
-            if batch_labels is None:
-                batch_labels = np.where(out < 0.5, 0, 1)
+        if raw_output:
+            if len(raw_all_labels) == 0:
+                for j in range(len(outputs)):
+                    raw_all_labels.append(outputs[j])
             else:
-                batch_labels = np.hstack((batch_labels, np.where(out < 0.5, 0, 1)))
+                for j in range(len(outputs)):
+                    raw_all_labels[j] = torch.cat((raw_all_labels[j], outputs[j]), dim=0)
 
-        # concat batch results
-        if all_labels is None:
-            all_labels = batch_labels
         else:
-            all_labels = np.vstack((all_labels, batch_labels))
+            # get batch labels
+            batch_labels = None
+            for out in outputs:
+                out = out.cpu().detach().numpy()
+                if batch_labels is None:
+                    batch_labels = np.where(out < 0.5, 0, 1)
+                else:
+                    batch_labels = np.hstack((batch_labels, np.where(out < 0.5, 0, 1)))
 
-    return all_labels
+            # concat batch results
+            if all_labels is None:
+                all_labels = batch_labels
+            else:
+                all_labels = np.vstack((all_labels, batch_labels))
+
+    if raw_output:
+        return tuple(raw_all_labels)
+    else:
+        return all_labels
 
 
-def evaluate(true_labels, pred_labels):
+def print_evaluation_results(true_labels, pred_labels):
     """
     Evaluates the performance of the trained model based on different multi-label classification metrics.
 
@@ -385,13 +409,103 @@ def calculate_label_weights(total_stops, num_activity):
     return pos_weight, neg_weight
 
 
+def calculate_trip_loss(model, train_data, feature_cols, epoch_num):
+    """
+    Calculates the normalised loss for each trip based on the existing model and rank them based on their loss.
+
+    Parameters:
+        model: pytorch model
+            Contains the interim model.
+        train_data: pandas.DataFrame
+            Contains the complete training data.
+        feature_cols: list
+            Contains the list of input features.
+        epoch_num: int:
+            Contains the epoch number.
+
+    Returns:
+        log: pandas.DataFrame
+            Contains the loss value for each trip
+    """
+    log = []
+    for trip_id in train_data["TripID"].unique():
+        trip_data = train_data[train_data["TripID"] == trip_id].reset_index(drop=True)
+        trip_x = trip_data[feature_cols]
+
+        if trip_x.shape[0] < config["batch_size"]:  # ignore trips that are shorter than the batch size
+            continue
+
+        trip_pred = inference(model, trip_x, raw_output=True)
+        pred_size = trip_pred[0].size(dim=0)
+
+        delivercargo_target = torch.tensor(trip_data['MappedActivity.DeliverCargo'].values[:pred_size]).to(device)
+        pickupcargo_target = torch.tensor(trip_data['MappedActivity.PickupCargo'].values[:pred_size]).to(device)
+        other_target = torch.tensor(trip_data['MappedActivity.Other'].values[:pred_size]).to(device)
+        shift_target = torch.tensor(trip_data['MappedActivity.Shift'].values[:pred_size]).to(device)
+        break_target = torch.tensor(trip_data['MappedActivity.Break'].values[:pred_size]).to(device)
+        dropofftrailer_target = torch.tensor(trip_data['MappedActivity.DropoffTrailerContainer'].values[:pred_size]).to(device)
+        pickuptrailer_target = torch.tensor(trip_data['MappedActivity.PickupTrailerContainer'].values[:pred_size]).to(device)
+        maintenance_target = torch.tensor(trip_data['MappedActivity.Maintenance'].values[:pred_size]).to(device)
+        target = (delivercargo_target.float(), pickupcargo_target.float(), other_target.float(),
+                  shift_target.float(), break_target.float(), dropofftrailer_target.float(),
+                  pickuptrailer_target.float(), maintenance_target.float())
+
+        trip_loss = model.calculate_loss(trip_pred, target).item() / len(trip_data)  # normalise trip loss based on stop number
+        log.append({"trip_id": trip_id, "epoch_{}_trip_loss".format(epoch_num): trip_loss})
+
+    log = pd.DataFrame(log)
+    log.sort_values(by="epoch_{}_trip_loss".format(epoch_num), ascending=True, ignore_index=True, inplace=True)
+    log["epoch_{}_rank".format(epoch_num)] = [i+1 for i in range(len(log))]
+    return log
+
+
+def assign_resample_prob(trip_rank, max_rank):
+    """
+    Assign the resampling probability for each trip based on its rank.
+
+    Parameters:
+        trip_rank: int
+            Contains rank of the trip.
+        max_rank: int
+            Contains the rank of the worst trip.
+
+    Returns:
+        resample_prob: float
+            Contains the resampling probability of a trip.
+    """
+    resample_prob = 0.1 + (trip_rank - 1) * (0.9 / (max_rank - 1))
+    return resample_prob
+
+
+def resample_trips(log, epoch_num):
+    """
+    Resamples trips for the next training iteration based on their resampling probabilities.
+
+    Parameters:
+        log: pandas.DataFrame
+            Contains the resampling probabilities for each trip.
+        epoch_num: int:
+            Contains the epoch number.
+
+    Returns:
+        resampled_trips: list
+            Contains the trips that has been resampled for the next training iteration.
+        log: pandas.DataFrame
+            Contains an additional column about whether a trip is being resampled.
+    """
+    log["epoch_{}_sampled".format(epoch_num)] = \
+        log["epoch_{}_resample_prob".format(epoch_num)].apply(lambda x: 1 if x >= random() else 0)
+    resampled_trips = log[log["epoch_{}_sampled".format(epoch_num)] == 1]["trip_id"].tolist()
+    return resampled_trips, log
+
+
 if __name__ == '__main__':
     # load training and test datasets
     loader = DataLoader()
     train_data, test_data = loader.train_test_split(test_ratio=0.25)
 
     # define features of interest
-    features = ['DriverID', 'Duration', 'StartHour', 'DayOfWeek.', 'PlaceType.', 'Commodity.',
+    features = ['Duration', 'StartHour', 'DayOfWeek.', 'PlaceType.', 'Commodity.',
                 'SpecialCargo.', 'Company.Type.', 'Industry.', 'VehicleType.', 'NumPOIs', 'POI.',
                 'LandUse.', 'Other.MappedActivity.', 'Past.MappedActivity.']
     feature_cols = [col for col in train_data.columns
@@ -460,16 +574,53 @@ if __name__ == '__main__':
 
         # train model
         epoch_train_loss = []
+        adaptive_sampling_log = None
         for epoch in range(config['epochs']):
             print('Epoch {}/{}'.format(epoch+1, config['epochs']))
             epoch_loss = train(model, optimiser, train_x, train_y, device)
             epoch_train_loss.append(epoch_loss)
             print('Epoch loss: {}'.format(epoch_loss))
 
+            if args.adaptive_sampling:
+                # calculate loss score for each trip and perform ranking
+                log = calculate_trip_loss(model, train_data, feature_cols, epoch+1)
+
+                # assign resampling probability based on rank
+                log["epoch_{}_resample_prob".format(epoch+1)] = log["epoch_{}_rank".format(epoch+1)]\
+                    .apply(assign_resample_prob, max_rank=len(log))
+
+                # perform resampling
+                resampled_trips, log = resample_trips(log, epoch+1)
+                sampled_train_data = train_data[train_data["TripID"].isin(resampled_trips)].reset_index(drop=True)
+                train_x = sampled_train_data[feature_cols]
+                train_y = sampled_train_data[activity_cols]
+
+                # save resampling log
+                if adaptive_sampling_log is None:
+                    adaptive_sampling_log = log
+                else:
+                    adaptive_sampling_log = adaptive_sampling_log.merge(log, on="trip_id", how="left")
+
+                # save adaptive sampling log
+                if not os.path.exists(config["log_directory"]):
+                    os.makedirs(config["log_directory"])
+
+                if args.bidirectional:
+                    adaptive_sampling_log.to_excel(config["log_directory"] + "log_{}.xlsx".format(args.name),
+                                                   index=False)
+                else:
+                    adaptive_sampling_log.to_excel(config["log_directory"] + "log_Bi{}.xlsx".format(args.name),
+                                                   index=False)
+
         # save trained model
-        torch.save(model.state_dict(),
-                   os.path.join(os.path.dirname(__file__),
-                                config['activity_models_directory'] + 'model_{}.pth'.format(args.name)))
+        if args.bidirectional:
+            torch.save(model.state_dict(),
+                       os.path.join(os.path.dirname(__file__),
+                                    config['activity_models_directory'] + 'model_Bi{}.pth'.format(args.name)))
+        else:
+            torch.save(model.state_dict(),
+                       os.path.join(os.path.dirname(__file__),
+                                    config['activity_models_directory'] + 'model_{}.pth'.format(args.name)))
 
         # plot train loss graph
         plot_train_loss(epoch_train_loss)
@@ -485,8 +636,8 @@ if __name__ == '__main__':
 
         train_pred = inference(model, train_x)
         print('Training Result')
-        evaluate(train_y.iloc[:train_pred.shape[0]], train_pred)
+        print_evaluation_results(train_y.iloc[:train_pred.shape[0]], train_pred)
 
         test_pred = inference(model, test_x)
         print('Test Result')
-        evaluate(test_y.iloc[:test_pred.shape[0]], test_pred)
+        print_evaluation_results(test_y.iloc[:test_pred.shape[0]], test_pred)
