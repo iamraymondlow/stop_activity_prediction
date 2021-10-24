@@ -58,7 +58,7 @@ class DataLoader:
                                   for time_str in driver_data['StartTime'].tolist()])
             time_diff = unix_time[1:] - unix_time[:-1]
             if len(driver_data) > 1:
-                assert np.any(time_diff >= 0.0)
+                assert np.any(time_diff < 0.0)
 
     def _buffer_in_meters(self, lng, lat, radius):
         """
@@ -271,8 +271,8 @@ class DataLoader:
         test_data = self.data[self.data['DriverID'].isin(test_id)].reset_index(drop=True)
 
         # check if stops are in chronological order
-        self.check_stop_order(train_data)
-        self.check_stop_order(test_data)
+        # self.check_stop_order(train_data)
+        # self.check_stop_order(test_data)
 
         # perform one hot encoding
         print('Performing one hot encoding...')
@@ -305,18 +305,22 @@ class DataLoader:
         train_data = deepcopy(temp_train_data.reset_index(drop=True))
         test_data = self._extract_other_driver_activities(test_data, train_data)
 
+        # once again check if stops are in chronological order
+        # self.check_stop_order(train_data)
+        # self.check_stop_order(test_data)
+
         # extract additional features based on drivers' past activities
         print('Extracting past activity information...')
         train_data = self._extract_past_activities(train_data)
         test_data = self._extract_past_activities(test_data)
 
         # once again check if stops are in chronological order
-        self.check_stop_order(train_data)
-        self.check_stop_order(test_data)
+        # self.check_stop_order(train_data)
+        # self.check_stop_order(test_data)
 
         # drop irrelevant columns
-        dropped_cols = ['StopLat', 'StopLon', 'Address', 'StartTime', 'EndTime', 'StopID',
-                        'TripID', 'Stops', 'Travels', 'YMD', 'LandUseType', 'geometry',
+        dropped_cols = ['StopLat', 'StopLon', 'Address', 'EndTime',
+                        'Stops', 'YMD', 'LandUseType', 'geometry',
                         'VehicleType', 'DayOfWeekStr', 'MappedLandUseType', 'LandUse.nan',
                         'StopUnixTime']
         retained_train_cols = [column for column in train_data.columns if column not in dropped_cols]
