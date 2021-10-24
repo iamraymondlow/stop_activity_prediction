@@ -14,8 +14,7 @@ from load_data import DataLoader
 from sklearn.metrics import accuracy_score, classification_report, hamming_loss, \
     jaccard_score, roc_auc_score, zero_one_loss
 from tqdm import tqdm
-from random import seed
-from random import random
+from random import seed, random
 
 # load config file
 with open(os.path.join(os.path.dirname(__file__), '../config.json')) as f:
