@@ -132,8 +132,7 @@ class DeepNeuralNetwork(nn.Module):
         t1, t2, t3, t4, t5, t6 = target
 
         if args.label_weighting:
-            loss1 = nn.BCELoss(
-                weight=self.calculate_weight(deliverpickupcargo_pos_weight, deliverpickupcargo_neg_weight, t1)) \
+            loss1 = nn.BCELoss(weight=self.calculate_weight(deliverpickupcargo_pos_weight, deliverpickupcargo_neg_weight, t1)) \
                 (out1, torch.reshape(t1, (-1, 1))).float()
             loss2 = nn.BCELoss(weight=self.calculate_weight(other_pos_weight, other_neg_weight, t2)) \
                 (out2, torch.reshape(t2, (-1, 1))).float()
@@ -141,8 +140,7 @@ class DeepNeuralNetwork(nn.Module):
                 (out3, torch.reshape(t3, (-1, 1))).float()
             loss4 = nn.BCELoss(weight=self.calculate_weight(break_pos_weight, break_neg_weight, t4)) \
                 (out4, torch.reshape(t4, (-1, 1))).float()
-            loss5 = nn.BCELoss(
-                weight=self.calculate_weight(dropoffpickuptrailer_pos_weight, dropoffpickuptrailer_neg_weight, t5)) \
+            loss5 = nn.BCELoss(weight=self.calculate_weight(dropoffpickuptrailer_pos_weight, dropoffpickuptrailer_neg_weight, t5)) \
                 (out5, torch.reshape(t5, (-1, 1))).float()
             loss6 = nn.BCELoss(weight=self.calculate_weight(maintenance_pos_weight, maintenance_neg_weight, t6)) \
                 (out6, torch.reshape(t6, (-1, 1))).float()
@@ -199,8 +197,7 @@ def train(model, optimiser, train_features, train_target, device):
         other_target = torch.tensor(batch_target['MappedActivity.Other'].values).to(device)
         shift_target = torch.tensor(batch_target['MappedActivity.Shift'].values).to(device)
         break_target = torch.tensor(batch_target['MappedActivity.Break'].values).to(device)
-        dropoffpickuptrailer_target = torch.tensor(
-            batch_target['MappedActivity.DropoffPickupTrailerContainer'].values).to(device)
+        dropoffpickuptrailer_target = torch.tensor(batch_target['MappedActivity.DropoffPickupTrailerContainer'].values).to(device)
         maintenance_target = torch.tensor(batch_target['MappedActivity.Maintenance'].values).to(device)
 
         # reset optimiser gradient to zero
@@ -376,8 +373,7 @@ def calculate_trip_loss(model, train_data, feature_cols, epoch_num):
         other_target = torch.tensor(trip_data['MappedActivity.Other'].values).to(device)
         shift_target = torch.tensor(trip_data['MappedActivity.Shift'].values).to(device)
         break_target = torch.tensor(trip_data['MappedActivity.Break'].values).to(device)
-        dropoffpickuptrailer_target = torch.tensor(trip_data['MappedActivity.DropoffPickupTrailerContainer'].values).to(
-            device)
+        dropoffpickuptrailer_target = torch.tensor(trip_data['MappedActivity.DropoffPickupTrailerContainer'].values).to(device)
         maintenance_target = torch.tensor(trip_data['MappedActivity.Maintenance'].values).to(device)
         target = (deliverpickupcargo_target.float(),
                   other_target.float(),
@@ -467,9 +463,9 @@ if __name__ == '__main__':
                     for feature in features
                     if feature in col]
     # mapped activity types
-    activity_cols = ['MappedActivity.DeliverCargo', 'MappedActivity.PickupCargo', 'MappedActivity.Other',
-                     'MappedActivity.Shift', 'MappedActivity.Break', 'MappedActivity.DropoffTrailerContainer',
-                     'MappedActivity.PickupTrailerContainer', 'MappedActivity.Maintenance']
+    activity_cols = ['MappedActivity.DeliverPickupCargo', 'MappedActivity.Other', 'MappedActivity.Shift',
+                     'MappedActivity.Break', 'MappedActivity.DropoffPickupTrailerContainer',
+                     'MappedActivity.Maintenance']
 
     train_x = train_data[feature_cols]
     train_y = train_data[activity_cols]
