@@ -32,6 +32,7 @@ parser.add_argument("--bidirectional", type=bool, default=True)
 parser.add_argument("--class_weighting", type=bool, default=True)
 parser.add_argument("--label_weighting", type=bool, default=True)
 parser.add_argument("--adaptive_sampling", type=bool, default=True)
+parser.add_argument("--adaptive_sampling_prob", type=float, default=0.1)
 parser.add_argument("--seed", type=int, default=1)
 args = parser.parse_args()
 seed(args.seed)
@@ -68,8 +69,6 @@ class LongShortTermMemory(nn.Module):
             self.out4 = nn.Linear(self.hidden_dim * 2, args.output_dim)
             self.out5 = nn.Linear(self.hidden_dim * 2, args.output_dim)
             self.out6 = nn.Linear(self.hidden_dim * 2, args.output_dim)
-            self.out7 = nn.Linear(self.hidden_dim * 2, args.output_dim)
-            self.out8 = nn.Linear(self.hidden_dim * 2, args.output_dim)
         else:
             self.out1 = nn.Linear(self.hidden_dim, args.output_dim)
             self.out2 = nn.Linear(self.hidden_dim, args.output_dim)
@@ -77,8 +76,6 @@ class LongShortTermMemory(nn.Module):
             self.out4 = nn.Linear(self.hidden_dim, args.output_dim)
             self.out5 = nn.Linear(self.hidden_dim, args.output_dim)
             self.out6 = nn.Linear(self.hidden_dim, args.output_dim)
-            self.out7 = nn.Linear(self.hidden_dim, args.output_dim)
-            self.out8 = nn.Linear(self.hidden_dim, args.output_dim)
 
     def forward(self, x):
         """
@@ -89,7 +86,7 @@ class LongShortTermMemory(nn.Module):
                 Input features of the model.
 
         Returns:
-            out1, out2, out3, out4, out5, out6, out7, out8: torch.tensor
+            out1, out2, out3, out4, out5, out6: torch.tensor
                 Model output for each activity class.
         """
         # initialise hidden state and cell state for first input with zeros
@@ -113,11 +110,8 @@ class LongShortTermMemory(nn.Module):
         out4 = torch.sigmoid(self.out4(x))
         out5 = torch.sigmoid(self.out5(x))
         out6 = torch.sigmoid(self.out6(x))
-        out7 = torch.sigmoid(self.out7(x))
-        out8 = torch.sigmoid(self.out8(x))
 
-        return out1.float(), out2.float(), out3.float(), out4.float(), out5.float(), \
-               out6.float(), out7.float(), out8.float()
+        return out1.float(), out2.float(), out3.float(), out4.float(), out5.float(), out6.float()
 
     def calculate_weight(self, pos_weight, neg_weight, mask_tensor):
         """
@@ -151,26 +145,23 @@ class LongShortTermMemory(nn.Module):
             sum_loss: float
                 Binary cross entropy loss of model output for all activity classes.
         """
-        out1, out2, out3, out4, out5, out6, out7, out8 = output
-        t1, t2, t3, t4, t5, t6, t7, t8 = target
+        out1, out2, out3, out4, out5, out6 = output
+        t1, t2, t3, t4, t5, t6 = target
 
         if args.label_weighting:
-            loss1 = nn.BCELoss(weight=self.calculate_weight(delivercargo_pos_weight, delivercargo_neg_weight, t1))\
+            loss1 = nn.BCELoss(weight=self.calculate_weight(deliverpickupcargo_pos_weight, deliverpickupcargo_neg_weight, t1)) \
                 (out1, torch.reshape(t1, (-1, 1))).float()
-            loss2 = nn.BCELoss(weight=self.calculate_weight(pickupcargo_pos_weight, pickupcargo_neg_weight, t2))\
+            loss2 = nn.BCELoss(weight=self.calculate_weight(other_pos_weight, other_neg_weight, t2)) \
                 (out2, torch.reshape(t2, (-1, 1))).float()
-            loss3 = nn.BCELoss(weight=self.calculate_weight(other_pos_weight, other_neg_weight, t3))\
+            loss3 = nn.BCELoss(weight=self.calculate_weight(shift_pos_weight, shift_neg_weight, t3)) \
                 (out3, torch.reshape(t3, (-1, 1))).float()
-            loss4 = nn.BCELoss(weight=self.calculate_weight(shift_pos_weight, shift_neg_weight, t4))\
+            loss4 = nn.BCELoss(weight=self.calculate_weight(break_pos_weight, break_neg_weight, t4)) \
                 (out4, torch.reshape(t4, (-1, 1))).float()
-            loss5 = nn.BCELoss(weight=self.calculate_weight(break_pos_weight, break_neg_weight, t5))\
+            loss5 = nn.BCELoss(weight=self.calculate_weight(dropoffpickuptrailer_pos_weight, dropoffpickuptrailer_neg_weight, t5)) \
                 (out5, torch.reshape(t5, (-1, 1))).float()
-            loss6 = nn.BCELoss(weight=self.calculate_weight(dropofftrailer_pos_weight, dropofftrailer_neg_weight, t6))\
+            loss6 = nn.BCELoss(weight=self.calculate_weight(maintenance_pos_weight, maintenance_neg_weight, t6)) \
                 (out6, torch.reshape(t6, (-1, 1))).float()
-            loss7 = nn.BCELoss(weight=self.calculate_weight(pickuptrailer_pos_weight, pickuptrailer_neg_weight, t7))\
-                (out7, torch.reshape(t7, (-1, 1))).float()
-            loss8 = nn.BCELoss(weight=self.calculate_weight(maintenance_pos_weight, maintenance_neg_weight, t8))\
-                (out8, torch.reshape(t8, (-1, 1))).float()
+
         else:
             loss1 = nn.BCELoss()(out1, torch.reshape(t1, (-1, 1))).float()
             loss2 = nn.BCELoss()(out2, torch.reshape(t2, (-1, 1))).float()
@@ -178,16 +169,17 @@ class LongShortTermMemory(nn.Module):
             loss4 = nn.BCELoss()(out4, torch.reshape(t4, (-1, 1))).float()
             loss5 = nn.BCELoss()(out5, torch.reshape(t5, (-1, 1))).float()
             loss6 = nn.BCELoss()(out6, torch.reshape(t6, (-1, 1))).float()
-            loss7 = nn.BCELoss()(out7, torch.reshape(t7, (-1, 1))).float()
-            loss8 = nn.BCELoss()(out8, torch.reshape(t8, (-1, 1))).float()
 
         if args.class_weighting:
-            sum_loss = loss1 * delivercargo_weight + loss2 * pickupcargo_weight + \
-                       loss3 * other_weight + loss4 * shift_weight + \
-                       loss5 * break_weight + loss6 * dropofftrailer_weight + \
-                       loss7 * pickuptrailer_weight + loss8 * maintenance_weight
+            sum_loss = loss1 * deliverpickupcargo_weight + \
+                       loss2 * other_weight + \
+                       loss3 * shift_weight + \
+                       loss4 * break_weight + \
+                       loss5 * dropoffpickuptrailer_weight + \
+                       loss6 * maintenance_weight
+
         else:
-            sum_loss = loss1 + loss2 + loss3 + loss4 + loss5 + loss6 + loss7 + loss8
+            sum_loss = loss1 + loss2 + loss3 + loss4 + loss5 + loss6
 
         return sum_loss
 
@@ -231,13 +223,11 @@ def train(model, optimiser, train_features, train_target, device):
 
         batch_features = batch_features.to(device)
         batch_target = train_target.iloc[(start_idx + args.sequence_len): end_idx]
-        delivercargo_target = torch.tensor(batch_target['MappedActivity.DeliverCargo'].values).to(device)
-        pickupcargo_target = torch.tensor(batch_target['MappedActivity.PickupCargo'].values).to(device)
+        deliverpickupcargo_target = torch.tensor(batch_target['MappedActivity.DeliverPickupCargo'].values).to(device)
         other_target = torch.tensor(batch_target['MappedActivity.Other'].values).to(device)
         shift_target = torch.tensor(batch_target['MappedActivity.Shift'].values).to(device)
         break_target = torch.tensor(batch_target['MappedActivity.Break'].values).to(device)
-        dropofftrailer_target = torch.tensor(batch_target['MappedActivity.DropoffTrailerContainer'].values).to(device)
-        pickuptrailer_target = torch.tensor(batch_target['MappedActivity.PickupTrailerContainer'].values).to(device)
+        dropoffpickuptrailer_target = torch.tensor(batch_target['MappedActivity.DropoffPickupTrailerContainer'].values).to(device)
         maintenance_target = torch.tensor(batch_target['MappedActivity.Maintenance'].values).to(device)
 
         # reset optimiser gradient to zero
@@ -245,9 +235,12 @@ def train(model, optimiser, train_features, train_target, device):
 
         # perform inference and compute loss
         output = model(batch_features.float())
-        target = (delivercargo_target.float(), pickupcargo_target.float(), other_target.float(),
-                  shift_target.float(), break_target.float(), dropofftrailer_target.float(),
-                  pickuptrailer_target.float(), maintenance_target.float())
+        target = (deliverpickupcargo_target.float(),
+                  other_target.float(),
+                  shift_target.float(),
+                  break_target.float(),
+                  dropoffpickuptrailer_target.float(),
+                  maintenance_target.float())
         loss = model.calculate_loss(output, target)
         train_loss += loss.item()
 
@@ -438,17 +431,18 @@ def calculate_trip_loss(model, train_data, feature_cols, epoch_num):
         trip_pred = inference(model, trip_x, raw_output=True)
         pred_size = trip_pred[0].size(dim=0)
 
-        delivercargo_target = torch.tensor(trip_data['MappedActivity.DeliverCargo'].values[:pred_size]).to(device)
-        pickupcargo_target = torch.tensor(trip_data['MappedActivity.PickupCargo'].values[:pred_size]).to(device)
+        deliverpickupcargo_target = torch.tensor(trip_data['MappedActivity.DeliverPickupCargo'].values[:pred_size]).to(device)
         other_target = torch.tensor(trip_data['MappedActivity.Other'].values[:pred_size]).to(device)
         shift_target = torch.tensor(trip_data['MappedActivity.Shift'].values[:pred_size]).to(device)
         break_target = torch.tensor(trip_data['MappedActivity.Break'].values[:pred_size]).to(device)
-        dropofftrailer_target = torch.tensor(trip_data['MappedActivity.DropoffTrailerContainer'].values[:pred_size]).to(device)
-        pickuptrailer_target = torch.tensor(trip_data['MappedActivity.PickupTrailerContainer'].values[:pred_size]).to(device)
+        dropoffpickuptrailer_target = torch.tensor(trip_data['MappedActivity.DropoffPickupTrailerContainer'].values[:pred_size]).to(device)
         maintenance_target = torch.tensor(trip_data['MappedActivity.Maintenance'].values[:pred_size]).to(device)
-        target = (delivercargo_target.float(), pickupcargo_target.float(), other_target.float(),
-                  shift_target.float(), break_target.float(), dropofftrailer_target.float(),
-                  pickuptrailer_target.float(), maintenance_target.float())
+        target = (deliverpickupcargo_target.float(),
+                  other_target.float(),
+                  shift_target.float(),
+                  break_target.float(),
+                  dropoffpickuptrailer_target.float(),
+                  maintenance_target.float())
 
         trip_loss = model.calculate_loss(trip_pred, target).item() / len(trip_data)  # normalise trip loss based on stop number
         log.append({"trip_id": trip_id, "epoch_{}_trip_loss".format(epoch_num): trip_loss})
@@ -473,7 +467,7 @@ def assign_resample_prob(trip_rank, max_rank):
         resample_prob: float
             Contains the resampling probability of a trip.
     """
-    resample_prob = 0.1 + (trip_rank - 1) * (0.9 / (max_rank - 1))
+    resample_prob = args.adaptive_sampling_prob + (trip_rank - 1) * ((1-args.adaptive_sampling_prob) / (max_rank - 1))
     return resample_prob
 
 
@@ -504,6 +498,25 @@ if __name__ == '__main__':
     loader = DataLoader()
     train_data, test_data = loader.train_test_split(test_ratio=0.25)
 
+    train_data["MappedActivity.DropoffPickupTrailerContainer"] = train_data["MappedActivity.DropoffTrailerContainer"] + \
+                                                                 train_data["MappedActivity.PickupTrailerContainer"]
+    test_data["MappedActivity.DropoffPickupTrailerContainer"] = test_data["MappedActivity.DropoffTrailerContainer"] + \
+                                                                test_data["MappedActivity.PickupTrailerContainer"]
+
+    train_data["MappedActivity.DeliverPickupCargo"] = train_data["MappedActivity.DeliverCargo"] + \
+                                                      train_data["MappedActivity.PickupCargo"]
+    test_data["MappedActivity.DeliverPickupCargo"] = test_data["MappedActivity.DeliverCargo"] + \
+                                                     test_data["MappedActivity.PickupCargo"]
+
+    train_data.loc[train_data["MappedActivity.DropoffPickupTrailerContainer"] > 0,
+                   'MappedActivity.DropoffPickupTrailerContainer'] = 1
+    test_data.loc[test_data["MappedActivity.DropoffPickupTrailerContainer"] > 0,
+                  'MappedActivity.DropoffPickupTrailerContainer'] = 1
+    train_data.loc[train_data["MappedActivity.DeliverPickupCargo"] > 0,
+                   'MappedActivity.DeliverPickupCargo'] = 1
+    test_data.loc[test_data["MappedActivity.DeliverPickupCargo"] > 0,
+                  'MappedActivity.DeliverPickupCargo'] = 1
+
     # define features of interest
     features = ['Duration', 'StartHour', 'DayOfWeek.', 'PlaceType.', 'Commodity.',
                 'SpecialCargo.', 'Company.Type.', 'Industry.', 'VehicleType.', 'NumPOIs', 'POI.',
@@ -511,16 +524,10 @@ if __name__ == '__main__':
     feature_cols = [col for col in train_data.columns
                     for feature in features
                     if feature in col]
-    # original activity types
-    # activity_cols = ['Activity.PickupTrailer', 'Activity.Passenger', 'Activity.Fueling', 'Activity.OtherWork',
-    #                  'Activity.DropoffTrailer', 'Activity.Resting', 'Activity.Personal', 'Activity.Shift',
-    #                  'Activity.ProvideService', 'Activity.DropoffContainer', 'Activity.Queuing', 'Activity.Other',
-    #                  'Activity.DeliverCargo', 'Activity.Maintenance', 'Activity.Fail', 'Activity.PickupCargo',
-    #                  'Activity.Meal', 'Activity.PickupContainer']
     # mapped activity types
-    activity_cols = ['MappedActivity.DeliverCargo', 'MappedActivity.PickupCargo', 'MappedActivity.Other',
-                     'MappedActivity.Shift', 'MappedActivity.Break', 'MappedActivity.DropoffTrailerContainer',
-                     'MappedActivity.PickupTrailerContainer', 'MappedActivity.Maintenance']
+    activity_cols = ['MappedActivity.DeliverPickupCargo', 'MappedActivity.Other', 'MappedActivity.Shift',
+                     'MappedActivity.Break', 'MappedActivity.DropoffPickupTrailerContainer',
+                     'MappedActivity.Maintenance']
 
     train_x = train_data[feature_cols]
     train_y = train_data[activity_cols]
@@ -528,38 +535,30 @@ if __name__ == '__main__':
     test_y = test_data[activity_cols]
 
     # introduce class weights based on inverse of class frequency
-    delivercargo_weight = calculate_class_weight(len(train_x), len(activity_cols),
-                                                 train_y['MappedActivity.DeliverCargo'].sum())
-    pickupcargo_weight = calculate_class_weight(len(train_x), len(activity_cols),
-                                                train_y['MappedActivity.PickupCargo'].sum())
+    deliverpickupcargo_weight = calculate_class_weight(len(train_x), len(activity_cols),
+                                                       train_y['MappedActivity.DeliverPickupCargo'].sum())
     other_weight = calculate_class_weight(len(train_x), len(activity_cols),
                                           train_y['MappedActivity.Other'].sum())
     shift_weight = calculate_class_weight(len(train_x), len(activity_cols),
                                           train_y['MappedActivity.Shift'].sum())
     break_weight = calculate_class_weight(len(train_x), len(activity_cols),
                                           train_y['MappedActivity.Break'].sum())
-    dropofftrailer_weight = calculate_class_weight(len(train_x), len(activity_cols),
-                                                   train_y['MappedActivity.DropoffTrailerContainer'].sum())
-    pickuptrailer_weight = calculate_class_weight(len(train_x), len(activity_cols),
-                                                  train_y['MappedActivity.PickupTrailerContainer'].sum())
+    dropoffpickuptrailer_weight = calculate_class_weight(len(train_x), len(activity_cols),
+                                                         train_y['MappedActivity.DropoffPickupTrailerContainer'].sum())
     maintenance_weight = calculate_class_weight(len(train_x), len(activity_cols),
                                                 train_y['MappedActivity.Maintenance'].sum())
 
     # introduce label weights based on inverse of label frequency
-    delivercargo_pos_weight, delivercargo_neg_weight = calculate_label_weights(
-        len(train_x), train_y['MappedActivity.DeliverCargo'].sum())
-    pickupcargo_pos_weight, pickupcargo_neg_weight = calculate_label_weights(
-        len(train_x), train_y['MappedActivity.PickupCargo'].sum())
+    deliverpickupcargo_pos_weight, deliverpickupcargo_neg_weight = calculate_label_weights(
+        len(train_x), train_y['MappedActivity.DeliverPickupCargo'].sum())
     other_pos_weight, other_neg_weight = calculate_label_weights(
         len(train_x), train_y['MappedActivity.Other'].sum())
     shift_pos_weight, shift_neg_weight = calculate_label_weights(
         len(train_x), train_y['MappedActivity.Shift'].sum())
     break_pos_weight, break_neg_weight = calculate_label_weights(
         len(train_x), train_y['MappedActivity.Break'].sum())
-    dropofftrailer_pos_weight, dropofftrailer_neg_weight = calculate_label_weights(
-        len(train_x), train_y['MappedActivity.DropoffTrailerContainer'].sum())
-    pickuptrailer_pos_weight, pickuptrailer_neg_weight = calculate_label_weights(
-        len(train_x), train_y['MappedActivity.PickupTrailerContainer'].sum())
+    dropoffpickuptrailer_pos_weight, dropoffpickuptrailer_neg_weight = calculate_label_weights(
+        len(train_x), train_y['MappedActivity.DropoffPickupTrailerContainer'].sum())
     maintenance_pos_weight, maintenance_neg_weight = calculate_label_weights(
         len(train_x), train_y['MappedActivity.Maintenance'].sum())
 
