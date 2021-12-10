@@ -270,10 +270,6 @@ class DataLoader:
         train_data = self.data[self.data['DriverID'].isin(train_id)].reset_index(drop=True)
         test_data = self.data[self.data['DriverID'].isin(test_id)].reset_index(drop=True)
 
-        # check if stops are in chronological order
-        # self.check_stop_order(train_data)
-        # self.check_stop_order(test_data)
-
         # perform one hot encoding
         print('Performing one hot encoding...')
         train_vehtype, test_vehtype = self._one_hot_encoding(train_data['VehicleType'],
@@ -305,18 +301,10 @@ class DataLoader:
         train_data = deepcopy(temp_train_data.reset_index(drop=True))
         test_data = self._extract_other_driver_activities(test_data, train_data)
 
-        # once again check if stops are in chronological order
-        # self.check_stop_order(train_data)
-        # self.check_stop_order(test_data)
-
         # extract additional features based on drivers' past activities
         print('Extracting past activity information...')
         train_data = self._extract_past_activities(train_data)
         test_data = self._extract_past_activities(test_data)
-
-        # once again check if stops are in chronological order
-        # self.check_stop_order(train_data)
-        # self.check_stop_order(test_data)
 
         # drop irrelevant columns
         dropped_cols = ['StopLat', 'StopLon', 'Address', 'EndTime',
