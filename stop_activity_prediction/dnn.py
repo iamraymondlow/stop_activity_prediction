@@ -26,10 +26,23 @@ parser.add_argument("--train_model", type=bool, default=True)
 parser.add_argument("--eval_model", type=bool, default=True)
 parser.add_argument("--dropout", type=float, default=0.5)
 parser.add_argument("--output_dim", type=int, default=1)
-parser.add_argument("--class_weighting", type=bool, default=True)
-parser.add_argument("--label_weighting", type=bool, default=True)
+parser.add_argument("--INCLUDE_DURATION", type=bool, default=True)
+parser.add_argument("--INCLUDE_STARTHOUR", type=bool, default=True)
+parser.add_argument("--INCLUDE_DAYOFWEEK", type=bool, default=True)
+parser.add_argument("--INCLUDE_PLACETYPE", type=bool, default=True)
+parser.add_argument("--INCLUDE_CARGOTYPE", type=bool, default=True)
+parser.add_argument("--INCLUDE_COMPANYINFO", type=bool, default=True)
+parser.add_argument("--INCLUDE_VEHICLETYPE", type=bool, default=True)
+parser.add_argument("--INCLUDE_POI", type=bool, default=True)
+parser.add_argument("--INCLUDE_URALANDUSE", type=bool, default=True)
+parser.add_argument("--INCLUDE_OTHERACTIVITY", type=bool, default=True)
+parser.add_argument("--INCLUDE_PASTACTIVITY", type=bool, default=True)
+parser.add_argument("--INCLUDE_LASTACTIVITY", type=bool, default=True)
+parser.add_argument("--class_weighting", type=bool, default=False)
+parser.add_argument("--label_weighting", type=bool, default=False)
 parser.add_argument("--adaptive_sampling", type=bool, default=True)
-parser.add_argument("--adaptive_sampling_prob", type=float, default=0.1)
+parser.add_argument("--adaptive_sampling_prob", type=float, default=0.6)  # used in v1
+parser.add_argument("--resampling_prob", type=float, default=0.5)  # used in v2
 parser.add_argument("--seed", type=int, default=1)
 args = parser.parse_args()
 seed(args.seed)
@@ -405,7 +418,11 @@ def assign_resample_prob(trip_rank, max_rank):
         resample_prob: float
             Contains the resampling probability of a trip.
     """
-    resample_prob = args.adaptive_sampling_prob + (trip_rank - 1) * ((1 - args.adaptive_sampling_prob) / (max_rank - 1))
+    if trip_rank < int(0.1 * max_rank):
+        resample_prob = 1
+    else:
+        resample_prob = args.resampling_prob
+
     return resample_prob
 
 
@@ -436,32 +453,49 @@ if __name__ == '__main__':
     loader = DataLoader()
     train_data, test_data = loader.train_test_split(test_ratio=0.25)
 
-    train_data["MappedActivity.DropoffPickupTrailerContainer"] = train_data["MappedActivity.DropoffTrailerContainer"] + \
-                                                                 train_data["MappedActivity.PickupTrailerContainer"]
-    test_data["MappedActivity.DropoffPickupTrailerContainer"] = test_data["MappedActivity.DropoffTrailerContainer"] + \
-                                                                test_data["MappedActivity.PickupTrailerContainer"]
+    # define features that will be passed into model
+    features = []
 
-    train_data["MappedActivity.DeliverPickupCargo"] = train_data["MappedActivity.DeliverCargo"] + \
-                                                      train_data["MappedActivity.PickupCargo"]
-    test_data["MappedActivity.DeliverPickupCargo"] = test_data["MappedActivity.DeliverCargo"] + \
-                                                     test_data["MappedActivity.PickupCargo"]
+    if args.INCLUDE_DURATION:
+        features.extend(["Duration"])
 
-    train_data.loc[train_data["MappedActivity.DropoffPickupTrailerContainer"] > 0,
-                   'MappedActivity.DropoffPickupTrailerContainer'] = 1
-    test_data.loc[test_data["MappedActivity.DropoffPickupTrailerContainer"] > 0,
-                  'MappedActivity.DropoffPickupTrailerContainer'] = 1
-    train_data.loc[train_data["MappedActivity.DeliverPickupCargo"] > 0,
-                   'MappedActivity.DeliverPickupCargo'] = 1
-    test_data.loc[test_data["MappedActivity.DeliverPickupCargo"] > 0,
-                  'MappedActivity.DeliverPickupCargo'] = 1
+    if args.INCLUDE_STARTHOUR:
+        features.extend(["StartHour"])
 
-    # define features of interest
-    features = ['Duration', 'StartHour', 'DayOfWeek.', 'PlaceType.', 'Commodity.',
-                'SpecialCargo.', 'Company.Type.', 'Industry.', 'VehicleType.', 'NumPOIs', 'POI.',
-                'LandUse.', 'Other.MappedActivity.', 'Past.MappedActivity.']
+    if args.INCLUDE_DAYOFWEEK:
+        features.extend(["DayOfWeek."])
+
+    if args.INCLUDE_PLACETYPE:
+        features.extend(["PlaceType."])
+
+    if args.INCLUDE_CARGOTYPE:
+        features.extend(["Commodity.", "SpecialCargo."])
+
+    if args.INCLUDE_COMPANYINFO:
+        features.extend(["Company.Type.", "Industry."])
+
+    if args.INCLUDE_VEHICLETYPE:
+        features.extend(["VehicleType."])
+
+    if args.INCLUDE_POI:
+        features.extend(["NumPOIs", "POI."])
+
+    if args.INCLUDE_URALANDUSE:
+        features.extend(["LandUse."])
+
+    if args.INCLUDE_OTHERACTIVITY:
+        features.extend(["Other.MappedActivity."])
+
+    if args.INCLUDE_PASTACTIVITY:
+        features.extend(["Past.MappedActivity."])
+
+    if args.INCLUDE_LASTACTIVITY:
+        features.extend(["LastActivity."])
+
     feature_cols = [col for col in train_data.columns
                     for feature in features
                     if feature in col]
+
     # mapped activity types
     activity_cols = ['MappedActivity.DeliverPickupCargo', 'MappedActivity.Other', 'MappedActivity.Shift',
                      'MappedActivity.Break', 'MappedActivity.DropoffPickupTrailerContainer',
@@ -500,6 +534,7 @@ if __name__ == '__main__':
     maintenance_pos_weight, maintenance_neg_weight = calculate_label_weights(
         len(train_x), train_y['MappedActivity.Maintenance'].sum())
 
+    model = None
     if args.train_model:  # perform model training
         # initialise model architecture
         model = DeepNeuralNetwork(input_dim=len(feature_cols))
@@ -522,8 +557,8 @@ if __name__ == '__main__':
                 # calculate loss score for each trip and perform ranking
                 log = calculate_trip_loss(model, train_data, feature_cols, epoch+1)
 
-                # assign resampling probability based on rank
-                log["epoch_{}_resample_prob".format(epoch+1)] = log["epoch_{}_rank".format(epoch+1)]\
+                # assign resampling probability
+                log["epoch_{}_resample_prob".format(epoch + 1)] = log["epoch_{}_rank".format(epoch + 1)] \
                     .apply(assign_resample_prob, max_rank=len(log))
 
                 # perform resampling
@@ -553,12 +588,14 @@ if __name__ == '__main__':
         plot_train_loss(epoch_train_loss)
 
     if args.eval_model:  # perform inference on test dataset and evaluate model performance
-        model = DeepNeuralNetwork(input_dim=len(feature_cols))
-        model.load_state_dict(torch.load(os.path.join(os.path.dirname(__file__),
-                                                      config['activity_models_directory'] +
-                                                      'model_{}.pth'.format(args.name))))
-        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        model.to(device)
+        if model is None:
+            model = DeepNeuralNetwork(input_dim=len(feature_cols))
+            model.load_state_dict(torch.load(os.path.join(os.path.dirname(__file__),
+                                                          config['activity_models_directory'] +
+                                                          'model_{}.pth'.format(args.name))))
+            device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+            model.to(device)
+
         model.eval()
 
         train_pred = inference(model, train_x)
@@ -568,3 +605,9 @@ if __name__ == '__main__':
         test_pred = inference(model, test_x)
         print('Test Result')
         print_evaluation_results(test_y, test_pred)
+
+    print('class weighting: {}'.format(args.class_weighting))
+    print('label weighting: {}'.format(args.label_weighting))
+    print('adaptive sampling: {}'.format(args.adaptive_sampling))
+    print('resampling prob: {}'.format(args.resampling_prob))
+    print("Features used: {}".format(feature_cols))

@@ -1,15 +1,38 @@
 import os
 import json
 import pandas as pd
+import argparse
 from load_data import DataLoader
 from joblib import dump, load
-from sklearn.metrics import accuracy_score, classification_report, hamming_loss, \
-    jaccard_score, roc_auc_score, zero_one_loss
+from sklearn.metrics import (accuracy_score,
+                             classification_report,
+                             hamming_loss,
+                             jaccard_score,
+                             roc_auc_score,
+                             zero_one_loss)
 from skmultilearn.problem_transform import ClassifierChain
-from sklearn.ensemble import ExtraTreesClassifier, RandomForestClassifier, GradientBoostingClassifier, \
-    AdaBoostClassifier
+from sklearn.ensemble import (ExtraTreesClassifier,
+                              RandomForestClassifier,
+                              GradientBoostingClassifier,
+                              AdaBoostClassifier)
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.linear_model import LogisticRegression
+
+
+parser = argparse.ArgumentParser()
+parser.add_argument("--INCLUDE_DURATION", type=bool, default=True)
+parser.add_argument("--INCLUDE_STARTHOUR", type=bool, default=True)
+parser.add_argument("--INCLUDE_DAYOFWEEK", type=bool, default=True)
+parser.add_argument("--INCLUDE_PLACETYPE", type=bool, default=True)
+parser.add_argument("--INCLUDE_CARGOTYPE", type=bool, default=True)
+parser.add_argument("--INCLUDE_COMPANYINFO", type=bool, default=True)
+parser.add_argument("--INCLUDE_VEHICLETYPE", type=bool, default=True)
+parser.add_argument("--INCLUDE_POI", type=bool, default=True)
+parser.add_argument("--INCLUDE_URALANDUSE", type=bool, default=True)
+parser.add_argument("--INCLUDE_OTHERACTIVITY", type=bool, default=True)
+parser.add_argument("--INCLUDE_PASTACTIVITY", type=bool, default=True)
+parser.add_argument("--INCLUDE_LASTACTIVITY", type=bool, default=True)
+args = parser.parse_args()
 
 
 # load config file
@@ -24,31 +47,62 @@ class MLModel:
         """
         Initialises the model object by loading the training and test datasets.
         """
+        # load train and test datasets
         loader = DataLoader()
         self.train_data, self.test_data = loader.train_test_split(test_ratio=0.25)
 
-        # define features of interest
-        features = ['DriverID', 'Duration', 'StartHour', 'DayOfWeek.', 'PlaceType.', 'Commodity.',
-                    'SpecialCargo.', 'Company.Type.', 'Industry.', 'VehicleType.', 'NumPOIs', 'POI.',
-                    'LandUse.', 'Other.MappedActivity.', 'Past.MappedActivity.']
-        feature_cols = [col for col in self.train_data.columns
-                        for feature in features
-                        if feature in col]
-        # original activity types
-        # activity_cols = ['Activity.PickupTrailer', 'Activity.Passenger', 'Activity.Fueling', 'Activity.OtherWork',
-        #                  'Activity.DropoffTrailer', 'Activity.Resting', 'Activity.Personal', 'Activity.Shift',
-        #                  'Activity.ProvideService', 'Activity.DropoffContainer', 'Activity.Queuing', 'Activity.Other',
-        #                  'Activity.DeliverCargo', 'Activity.Maintenance', 'Activity.Fail', 'Activity.PickupCargo',
-        #                  'Activity.Meal', 'Activity.PickupContainer']
-        # mapped activity types
-        activity_cols = ['MappedActivity.DeliverCargo', 'MappedActivity.PickupCargo', 'MappedActivity.Other',
-                         'MappedActivity.Shift', 'MappedActivity.Break', 'MappedActivity.DropoffTrailerContainer',
-                         'MappedActivity.PickupTrailerContainer', 'MappedActivity.Maintenance']
+        # define features that will be passed into model
+        self.features = []
 
-        self.train_x = self.train_data[feature_cols]
-        self.train_y = self.train_data[activity_cols]
-        self.test_x = self.test_data[feature_cols]
-        self.test_y = self.test_data[activity_cols]
+        if args.INCLUDE_DURATION:
+            self.features.extend(["Duration"])
+
+        if args.INCLUDE_STARTHOUR:
+            self.features.extend(["StartHour"])
+
+        if args.INCLUDE_DAYOFWEEK:
+            self.features.extend(["DayOfWeek."])
+
+        if args.INCLUDE_PLACETYPE:
+            self.features.extend(["PlaceType."])
+
+        if args.INCLUDE_CARGOTYPE:
+            self.features.extend(["Commodity.", "SpecialCargo."])
+
+        if args.INCLUDE_COMPANYINFO:
+            self.features.extend(["Company.Type.", "Industry."])
+
+        if args.INCLUDE_VEHICLETYPE:
+            self.features.extend(["VehicleType."])
+
+        if args.INCLUDE_POI:
+            self.features.extend(["NumPOIs", "POI."])
+
+        if args.INCLUDE_URALANDUSE:
+            self.features.extend(["LandUse."])
+
+        if args.INCLUDE_OTHERACTIVITY:
+            self.features.extend(["Other.MappedActivity."])
+
+        if args.INCLUDE_PASTACTIVITY:
+            self.features.extend(["Past.MappedActivity."])
+
+        if args.INCLUDE_LASTACTIVITY:
+            self.features.extend(["LastActivity."])
+
+        self.feature_cols = [col for col in self.train_data.columns
+                        for feature in self.features
+                        if feature in col]
+
+        # mapped activity types
+        self.activity_cols = ['MappedActivity.DeliverPickupCargo', 'MappedActivity.Other', 'MappedActivity.Shift',
+                              'MappedActivity.Break', 'MappedActivity.DropoffPickupTrailerContainer',
+                              'MappedActivity.Maintenance']
+
+        self.train_x = self.train_data[self.feature_cols]
+        self.train_y = self.train_data[self.activity_cols]
+        self.test_x = self.test_data[self.feature_cols]
+        self.test_y = self.test_data[self.activity_cols]
         self.model = None
 
     def _initialise_model(self, algorithm=None):
@@ -105,6 +159,7 @@ class MLModel:
         dump(model, os.path.join(os.path.dirname(__file__),
                                  config['activity_models_directory'] +
                                  'model_{}.joblib'.format(algorithm)))
+        self.model = model
         return None
 
     def evaluate(self, algorithm=None, classifier_chain=False):
@@ -117,10 +172,11 @@ class MLModel:
             classifier_chain: bool
                 Indicates whether the problem will be transformed into a classifier chain
         """
-        # load model
-        self.model = load(os.path.join(os.path.dirname(__file__),
-                                       config['activity_models_directory'] +
-                                       'model_{}.joblib'.format(algorithm)))
+        if self.model is None:
+            # load model
+            self.model = load(os.path.join(os.path.dirname(__file__),
+                                           config['activity_models_directory'] +
+                                           'model_{}.joblib'.format(algorithm)))
 
         # perform inference on test set
         test_pred = self.model.predict(self.test_x)
@@ -138,8 +194,9 @@ class MLModel:
         print('Hamming Loss: {}'.format(hamming_loss(self.test_y, test_pred)))
         print('Jaccard Score')
         print(jaccard_score(self.test_y, test_pred, average=None))
+        print(jaccard_score(self.test_y, test_pred, average='macro'))
         print('ROC AUC Score')
-        print(roc_auc_score(self.test_y.values, test_pred.values, average=None))
+        print(roc_auc_score(self.test_y.values, test_pred.values))
         print('Zero One Loss: {}'.format(zero_one_loss(self.test_y, test_pred)))
         print('Classification Report:')
         print(classification_report(self.test_y, test_pred, target_names=activity_labels, zero_division=0))
@@ -179,3 +236,5 @@ if __name__ == '__main__':
     # multinomial logit model
     model.train(algorithm='MultinomialLogit', classifier_chain=True)
     model.evaluate(algorithm='MultinomialLogit', classifier_chain=True)
+
+    print("Features used: {}".format(model.feature_cols))
