@@ -248,14 +248,14 @@ class POIConflationTool:
         sla_pois = self.sla_data[self.sla_data.intersects(buffer)]
 
         # extract neighbouring POIs from GoogleMap either locally or using API
-        # if (self.google_data is not None) and (stop_id in self.google_data['stop'].tolist()):
-        #     google_pois = self.google_data[self.google_data['stop'] == stop_id]
-        # else:
-        #     google_pois = self.google_scrapper.extract_poi(lat, lng, stop_id)
-        #     if self.google_data is None:
-        #         self.google_data = google_pois
-        #     else:
-        #         self.google_data = pd.concat([self.google_data, google_pois], ignore_index=True)
+        if (self.google_data is not None) and (stop_id in self.google_data['stop'].tolist()):
+            google_pois = self.google_data[self.google_data['stop'] == stop_id]
+        else:
+            google_pois = self.google_scrapper.extract_poi(lat, lng, stop_id)
+            if self.google_data is None:
+                self.google_data = google_pois
+            else:
+                self.google_data = pd.concat([self.google_data, google_pois], ignore_index=True)
 
         # extract neighbouring POIs from HERE Map either locally or using API
         if (self.here_data is not None) and (stop_id in self.here_data['stop'].tolist()):
@@ -269,27 +269,17 @@ class POIConflationTool:
 
         # perform conflation
         combined_pois = pd.concat([osm_pois, onemap_pois, sla_pois,
-                                   here_pois], ignore_index=True)  #TODO remove
+                                   google_pois, here_pois], ignore_index=True)
         # combined_pois = pd.concat([osm_pois, onemap_pois, sla_pois,
-        #                            google_pois, here_pois], ignore_index=True)
+        #                            here_pois], ignore_index=True)  # TODO remove
+        # combined_pois = osm_pois  # TODO remove
 
         if len(combined_pois) == 0:
             return None
 
         conflated_pois = self._perform_conflation(combined_pois)
 
-        # cache conflated POIs
-        if (conflated_pois is None) and (self.conflated_data is None):
-            pass
-        elif self.conflated_data is None:
-            self.conflated_data = conflated_pois
-        else:
-            self.conflated_data = pd.concat([self.conflated_data, conflated_pois], ignore_index=True)
-        if (self.conflated_data is not None) and ('duplicates' in self.conflated_data.columns):
-            self.conflated_data.drop(columns=['duplicates'], inplace=True)
-            self.conflated_data.to_file(os.path.join(os.path.dirname(__file__), config['conflated_cache']),
-                                        encoding='utf-8')
-
+        # return combined_pois
         return conflated_pois
 
     def _perform_conflation(self, potential_duplicates):
@@ -328,7 +318,7 @@ class POIConflationTool:
 
             return conflated_pois
         else:
-            potential_duplicates
+            return potential_duplicates
 
     def _identify_duplicates(self, data, centroid_idx, address_matrix):
         """
@@ -600,8 +590,6 @@ class POIConflationTool:
     # tool = POIConflationTool()
     # data = pd.read_excel('../../data/processed_data/combined_stop_data.xlsx')
     # for i in range(len(data)):
-    #     if i < 44081:
-    #         continue
     #     print('Processing {}/{}'.format(i+1, len(data)))
     #     tool.extract_poi(data.loc[i, 'StopLat'],
     #                      data.loc[i, 'StopLon'],
