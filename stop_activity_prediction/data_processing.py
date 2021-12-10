@@ -239,29 +239,6 @@ class DataProcessor:
 
         return verified_stops
 
-    def _extract_last_activity(self, verified_stops):
-        """
-        Extracts last activity information.
-
-        Parameters:
-            verified_stops: pd.DataFrame
-                Contains the verified stops information.
-
-        Return:
-            verified_stops: pd.DataFrame
-                Contains the verified stops information with last activity information.
-        """
-        activity_cols = [col for col in list(verified_stops.columns) if "MappedActivity." in col]
-        activity_array = verified_stops[activity_cols].values
-        last_activity_array = np.zeros(activity_array.shape)
-        last_activity_array[1:, :] = activity_array[:-1, :]
-        last_activity_df = pd.DataFrame(last_activity_array,
-                                        columns=[col.replace("MappedActivity", "LastActivity")
-                                                 for col in activity_cols])
-        verified_stops = pd.concat([verified_stops, last_activity_df], axis=1)
-
-        return verified_stops
-
     def _extract_verified_stops(self, verified_trips, batch_num):
         """
         Extracts the verified stop information based on the verified trips.
@@ -290,9 +267,6 @@ class DataProcessor:
 
         # perform mapping of activity types
         verified_stops = self._activity_type_mapping(verified_stops)
-
-        # extract last activity information
-        verified_stops = self._extract_last_activity(verified_stops)
 
         return verified_stops
 
