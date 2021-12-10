@@ -42,7 +42,7 @@ parser.add_argument("--INCLUDE_LASTACTIVITY", type=bool, default=True)
 parser.add_argument("--class_weighting", type=bool, default=True)
 parser.add_argument("--label_weighting", type=bool, default=True)
 parser.add_argument("--adaptive_sampling", type=bool, default=True)
-parser.add_argument("--adaptive_sampling_prob", type=float, default=0.1)
+parser.add_argument("--adaptive_resampling_prob", type=float, default=0.5)
 parser.add_argument("--num_classes", type=int, default=8)
 parser.add_argument("--sample_num", type=int, default=5)
 parser.add_argument("--seed", type=int, default=1)
@@ -435,7 +435,7 @@ def assign_resample_prob(trip_rank, max_rank):
     if trip_rank < int(0.1 * max_rank):
         resample_prob = 1
     else:
-        resample_prob = args.resampling_prob
+        resample_prob = args.adaptive_resampling_prob
 
     return resample_prob
 
