@@ -235,6 +235,29 @@ class DataLoader:
                                                for cat in encoder.get_feature_names(['X'])])
         return train_onehot_df, test_onehot_df
 
+    def _extract_last_activity(self, data):
+        """
+        Extracts last activity information.
+
+        Parameters:
+            data: pd.DataFrame
+                Contains the verified stops information.
+
+        Return:
+            data: pd.DataFrame
+                Contains the verified stops information with last activity information.
+        """
+        activity_cols = [col for col in list(data.columns) if "MappedActivity." in col]
+        activity_array = data[activity_cols].values
+        last_activity_array = np.zeros(activity_array.shape)
+        last_activity_array[1:, :] = activity_array[:-1, :]
+        last_activity_df = pd.DataFrame(last_activity_array,
+                                        columns=[col.replace("MappedActivity", "LastActivity")
+                                                 for col in activity_cols])
+        data = pd.concat([data, last_activity_df], axis=1)
+
+        return data
+
     def train_test_split(self, test_ratio=0.25):
         """
         Performs train test split on the combined HVP dataset and performs feature extraction.
@@ -261,6 +284,10 @@ class DataLoader:
                                                    config['processed_data_directory'] + 'test_data.xlsx'))
 
             return train_data, test_data
+
+        # extract last activity information
+        print("Extract last activity information...")
+        self.data = self._extract_last_activity(self.data)
 
         # perform train test split
         driver_id = self.data['DriverID'].unique()
