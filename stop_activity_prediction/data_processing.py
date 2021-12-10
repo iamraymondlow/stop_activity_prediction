@@ -239,6 +239,29 @@ class DataProcessor:
 
         return verified_stops
 
+    def _extract_last_activity(self, verified_stops):
+        """
+        Extracts last activity information.
+
+        Parameters:
+            verified_stops: pd.DataFrame
+                Contains the verified stops information.
+
+        Return:
+            verified_stops: pd.DataFrame
+                Contains the verified stops information with last activity information.
+        """
+        activity_cols = [col for col in list(verified_stops.columns) if "MappedActivity." in col]
+        activity_array = verified_stops[activity_cols].values
+        last_activity_array = np.zeros(activity_array.shape)
+        last_activity_array[1:, :] = activity_array[:-1, :]
+        last_activity_df = pd.DataFrame(last_activity_array,
+                                        columns=[col.replace("MappedActivity", "LastActivity")
+                                                 for col in activity_cols])
+        verified_stops = pd.concat([verified_stops, last_activity_df], axis=1)
+
+        return verified_stops
+
     def _extract_verified_stops(self, verified_trips, batch_num):
         """
         Extracts the verified stop information based on the verified trips.
@@ -267,6 +290,9 @@ class DataProcessor:
 
         # perform mapping of activity types
         verified_stops = self._activity_type_mapping(verified_stops)
+
+        # extract last activity information
+        verified_stops = self._extract_last_activity(verified_stops)
 
         return verified_stops
 
@@ -454,11 +480,11 @@ class DataProcessor:
 
         self.combined_trip_data = pd.concat([self.combined_trip_data, batch_trip_data], ignore_index=True)
         self.combined_trip_data.to_excel(os.path.join(os.path.dirname(__file__),
-                                                      config['processed_data_directory'] + 'combined_trip_data.xlsx'),
+                                                      config['processed_data_directory']+'combined_trip_data.xlsx'),
                                          index=False)
         self.combined_stop_data = pd.concat([self.combined_stop_data, batch_stop_data], ignore_index=True)
         self.combined_stop_data.to_excel(os.path.join(os.path.dirname(__file__),
-                                                      config['processed_data_directory'] + 'combined_stop_data.xlsx'),
+                                                      config['processed_data_directory']+'combined_stop_data.xlsx'),
                                          index=False,
                                          encoding='utf-8')
 
