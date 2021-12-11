@@ -51,6 +51,29 @@ class MLModel:
         loader = DataLoader()
         self.train_data, self.test_data = loader.train_test_split(test_ratio=0.25)
 
+        # merge certain activity types  #TODO can be removed in the future if data processing code is rerun
+        self.train_data["MappedActivity.DropoffPickupTrailerContainer"] = self.train_data[
+                                                                              "MappedActivity.DropoffTrailerContainer"] + \
+                                                                          self.train_data[
+                                                                              "MappedActivity.PickupTrailerContainer"]
+        self.test_data["MappedActivity.DropoffPickupTrailerContainer"] = self.test_data[
+                                                                             "MappedActivity.DropoffTrailerContainer"] + \
+                                                                         self.test_data[
+                                                                             "MappedActivity.PickupTrailerContainer"]
+        self.train_data["MappedActivity.DeliverPickupCargo"] = self.train_data["MappedActivity.DeliverCargo"] + \
+                                                               self.train_data["MappedActivity.PickupCargo"]
+        self.test_data["MappedActivity.DeliverPickupCargo"] = self.test_data["MappedActivity.DeliverCargo"] + \
+                                                              self.test_data["MappedActivity.PickupCargo"]
+
+        self.train_data.loc[self.train_data["MappedActivity.DropoffPickupTrailerContainer"] > 0,
+                            'MappedActivity.DropoffPickupTrailerContainer'] = 1
+        self.test_data.loc[self.test_data["MappedActivity.DropoffPickupTrailerContainer"] > 0,
+                           'MappedActivity.DropoffPickupTrailerContainer'] = 1
+        self.train_data.loc[self.train_data["MappedActivity.DeliverPickupCargo"] > 0,
+                            'MappedActivity.DeliverPickupCargo'] = 1
+        self.test_data.loc[self.test_data["MappedActivity.DeliverPickupCargo"] > 0,
+                           'MappedActivity.DeliverPickupCargo'] = 1
+
         # define features that will be passed into model
         self.features = []
 
@@ -91,8 +114,8 @@ class MLModel:
             self.features.extend(["LastActivity."])
 
         self.feature_cols = [col for col in self.train_data.columns
-                        for feature in self.features
-                        if feature in col]
+                             for feature in self.features
+                             if feature == col[:len(feature)]]
 
         # mapped activity types
         self.activity_cols = ['MappedActivity.DeliverPickupCargo', 'MappedActivity.Other', 'MappedActivity.Shift',

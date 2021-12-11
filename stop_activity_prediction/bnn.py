@@ -39,9 +39,9 @@ parser.add_argument("--INCLUDE_URALANDUSE", type=bool, default=True)
 parser.add_argument("--INCLUDE_OTHERACTIVITY", type=bool, default=True)
 parser.add_argument("--INCLUDE_PASTACTIVITY", type=bool, default=True)
 parser.add_argument("--INCLUDE_LASTACTIVITY", type=bool, default=True)
-parser.add_argument("--class_weighting", type=bool, default=True)
-parser.add_argument("--label_weighting", type=bool, default=True)
-parser.add_argument("--adaptive_sampling", type=bool, default=True)
+parser.add_argument("--class_weighting", type=bool, default=False)
+parser.add_argument("--label_weighting", type=bool, default=False)
+parser.add_argument("--adaptive_sampling", type=bool, default=False)
 parser.add_argument("--adaptive_resampling_prob", type=float, default=0.5)
 parser.add_argument("--num_classes", type=int, default=8)
 parser.add_argument("--sample_num", type=int, default=5)
@@ -467,6 +467,27 @@ if __name__ == '__main__':
     loader = DataLoader()
     train_data, test_data = loader.train_test_split(test_ratio=0.25)
 
+    # merge certain activity types  #TODO can be removed in the future if data processing code is rerun
+    train_data["MappedActivity.DropoffPickupTrailerContainer"] = train_data[
+                                                                     "MappedActivity.DropoffTrailerContainer"] + \
+                                                                 train_data["MappedActivity.PickupTrailerContainer"]
+    test_data["MappedActivity.DropoffPickupTrailerContainer"] = test_data[
+                                                                    "MappedActivity.DropoffTrailerContainer"] + \
+                                                                test_data["MappedActivity.PickupTrailerContainer"]
+    train_data["MappedActivity.DeliverPickupCargo"] = train_data["MappedActivity.DeliverCargo"] + \
+                                                      train_data["MappedActivity.PickupCargo"]
+    test_data["MappedActivity.DeliverPickupCargo"] = test_data["MappedActivity.DeliverCargo"] + \
+                                                     test_data["MappedActivity.PickupCargo"]
+
+    train_data.loc[train_data["MappedActivity.DropoffPickupTrailerContainer"] > 0,
+                   'MappedActivity.DropoffPickupTrailerContainer'] = 1
+    test_data.loc[test_data["MappedActivity.DropoffPickupTrailerContainer"] > 0,
+                  'MappedActivity.DropoffPickupTrailerContainer'] = 1
+    train_data.loc[train_data["MappedActivity.DeliverPickupCargo"] > 0,
+                   'MappedActivity.DeliverPickupCargo'] = 1
+    test_data.loc[test_data["MappedActivity.DeliverPickupCargo"] > 0,
+                  'MappedActivity.DeliverPickupCargo'] = 1
+
     # define features that will be passed into model
     features = []
 
@@ -508,7 +529,7 @@ if __name__ == '__main__':
 
     feature_cols = [col for col in train_data.columns
                     for feature in features
-                    if feature in col]
+                    if feature == col[:len(feature)]]
 
     # mapped activity types
     activity_cols = ['MappedActivity.DeliverPickupCargo', 'MappedActivity.Other', 'MappedActivity.Shift',

@@ -13,6 +13,8 @@ from load_data import DataLoader
 from sklearn.metrics import accuracy_score, classification_report, hamming_loss, \
     jaccard_score, roc_auc_score, zero_one_loss
 from tqdm import tqdm
+from random import seed, random
+
 
 # load config file
 with open(os.path.join(os.path.dirname(__file__), '../config.json')) as f:
@@ -28,9 +30,12 @@ parser.add_argument("--hidden_dim", type=int, default=128)
 parser.add_argument("--num_layers", type=int, default=1)
 parser.add_argument("--output_dim", type=int, default=1)
 parser.add_argument("--class_weighting", type=bool, default=True)
+parser.add_argument("--adaptive_sampling", type=bool, default=True)
 parser.add_argument("--num_classes", type=int, default=8)
 parser.add_argument("--sample_num", type=int, default=5)
+parser.add_argument("--seed", type=int, default=1)
 args = parser.parse_args()
+seed(args.seed)
 
 
 @variational_estimator
@@ -84,12 +89,20 @@ class BayesianLongShortTermMemory(nn.Module):
         """
         # initialise hidden state for first input with zeros
         hidden_0 = torch.zeros(self.num_layers, x.size(0), self.hidden_dim).requires_grad_()
+        print('hidden_0 size: {}'.format(hidden_0.size()))
+        print('hidden_0 detach size: {}'.format(hidden_0.detach().size()))
 
         # initialise cell state for first input with zeros
         cell_0 = torch.zeros(self.num_layers, x.size(0), self.hidden_dim).requires_grad_()
+        print('cell_0 size: {}'.format(cell_0.size()))
+        print('cell_0 detach size: {}'.format(cell_0.detach().size()))
 
         # forward propagation by passing input, hidden state and cell state into model
         x, (hidden_1, cell_1) = self.blstm1(x, (hidden_0.detach(), cell_0.detach()))
+        print('hidden_1 size: {}'.format(hidden_1.size()))
+        print('hidden_1 detach size: {}'.format(hidden_1.detach().size()))
+        print('cell_1 size: {}'.format(cell_1.size()))
+        print('cell_1 detach size: {}'.format(cell_1.detach().size()))
         x, (hidden_2, cell_2) = self.blstm2(x, (hidden_1, cell_1))
         x, (hidden_3, cell_3) = self.blstm3(x, (hidden_2, cell_2))
         x, (hidden_4, cell_4) = self.blstm4(x, (hidden_3, cell_3))
@@ -263,7 +276,7 @@ def inference(model, input_features):
     return final_labels
 
 
-def evaluate(true_labels, pred_labels):
+def print_evaluation_results(true_labels, pred_labels):
     """
     Evaluates the performance of the trained model based on different multi-label classification metrics.
 
@@ -282,6 +295,7 @@ def evaluate(true_labels, pred_labels):
     print('Hamming Loss: {}'.format(hamming_loss(true_labels, pred_labels)))
     print('Jaccard Score')
     print(jaccard_score(true_labels, pred_labels, average=None))
+    print(jaccard_score(true_labels, pred_labels, average=True))
     print('ROC AUC Score')
     print(roc_auc_score(true_labels, pred_labels))
     print('Zero One Loss: {}'.format(zero_one_loss(true_labels, pred_labels)))
@@ -365,8 +379,8 @@ if __name__ == '__main__':
 
         train_pred = inference(model, train_x)
         print('Training Result')
-        evaluate(train_y.iloc[:train_pred.shape[0]], train_pred)
+        print_evaluation_results(train_y.iloc[:train_pred.shape[0]], train_pred)
 
         test_pred = inference(model, test_x)
         print('Test Result')
-        evaluate(test_y.iloc[:test_pred.shape[0]], test_pred)
+        print_evaluation_results(test_y.iloc[:test_pred.shape[0]], test_pred)
