@@ -646,3 +646,28 @@ if __name__ == '__main__':
     print('adaptive sampling: {}'.format(args.adaptive_sampling))
     print('resampling prob: {}'.format(args.resampling_prob))
     print("Features used: {}".format(feature_cols))
+
+    if not args.INCLUDE_DURATION:
+        print('Feature dropped: {}'.format("Duration"))
+    if not args.INCLUDE_STARTHOUR:
+        print('Feature dropped: {}'.format("Start Hour"))
+    if not args.INCLUDE_DAYOFWEEK:
+        print('Feature dropped: {}'.format("Day of Week"))
+    if not args.INCLUDE_PLACETYPE:
+        print('Feature dropped: {}'.format("Place Type"))
+    if not args.INCLUDE_CARGOTYPE:
+        print('Feature dropped: {}'.format("Cargo Type"))
+    if not args.INCLUDE_COMPANYINFO:
+        print('Feature dropped: {}'.format("Company Info"))
+    if not args.INCLUDE_VEHICLETYPE:
+        print('Feature dropped: {}'.format("Vehicle Type"))
+    if not args.INCLUDE_POI:
+        print('Feature dropped: {}'.format("POI"))
+    if not args.INCLUDE_URALANDUSE:
+        print('Feature dropped: {}'.format("URA Land Use"))
+    if not args.INCLUDE_OTHERACTIVITY:
+        print('Feature dropped: {}'.format("Other Driver Activity"))
+    if not args.INCLUDE_PASTACTIVITY:
+        print('Feature dropped: {}'.format("Past Activity"))
+    if not args.INCLUDE_LASTACTIVITY:
+        print('Feature dropped: {}'.format("Last Activity"))
