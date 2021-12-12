@@ -629,7 +629,8 @@ if __name__ == '__main__':
     print('class weighting: {}'.format(args.class_weighting))
     print('label weighting: {}'.format(args.label_weighting))
     print('adaptive sampling: {}'.format(args.adaptive_sampling))
-    print('resampling prob: {}'.format(args.resampling_prob))
+    if args.adaptive_sampling:
+        print('resampling prob: {}'.format(args.adaptive_resampling_prob))
     print("Features used: {}".format(feature_cols))
 
     if not args.INCLUDE_DURATION:
